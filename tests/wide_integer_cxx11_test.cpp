@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <wide_integer/wide_integer.h>
+#include <wide_integer/wide_integer_cxx11.h>
 
 TEST(WideIntegerBasic, Addition)
 {
