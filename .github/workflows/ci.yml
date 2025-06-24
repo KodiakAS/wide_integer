@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev
+      - name: Configure
+        run: cmake -S . -B build
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
+      - name: Check code format
+        run: |
+          FILES=$(git ls-files '*.cpp' '*.hpp' '*.h')
+          if [ -n "$FILES" ]; then
+            clang-format -i --style=file $FILES
+            git diff --exit-code
+          fi
+
