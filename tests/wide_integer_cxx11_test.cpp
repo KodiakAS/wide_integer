@@ -114,3 +114,127 @@ TEST(WideIntegerBoundary, Signed512)
         "-670390396497129854978701249910292306373968291029619668886178072186088201503677348840093714908345171384501592909324302542687694140"
         "5973284973216824503042048");
 }
+
+TEST(WideInteger256, Arithmetic)
+{
+    wide::integer<256, unsigned> base = wide::integer<256, unsigned>(1) << 200;
+    wide::integer<256, unsigned> small = 123456789U;
+
+    auto add = base + small;
+    EXPECT_EQ(
+        wide::to_string(add),
+        "1606938044258990275541962092341162602522202993782792958758165");
+
+    auto sub = base - small;
+    EXPECT_EQ(
+        wide::to_string(sub),
+        "1606938044258990275541962092341162602522202993782792711844587");
+
+    auto mul = small * 20U;
+    EXPECT_EQ(wide::to_string(mul), "2469135780");
+
+    auto div = mul / 10U;
+    EXPECT_EQ(wide::to_string(div), "246913578");
+}
+
+TEST(WideInteger256, BitwiseAndShift)
+{
+    wide::integer<256, unsigned> a = wide::integer<256, unsigned>(1) << 200;
+    auto left = a << 50;
+    EXPECT_EQ(
+        wide::to_string(left),
+        "1809251394333065553493296640760748560207343510400633813116524750123642650624");
+
+    auto right = a >> 100;
+    EXPECT_EQ(wide::to_string(right), "1267650600228229401496703205376");
+
+    auto b = a | (wide::integer<256, unsigned>(1) << 199);
+    EXPECT_EQ(
+        wide::to_string(b),
+        "2410407066388485413312943138511743903783304490674189252952064");
+}
+
+TEST(WideInteger256, Comparison)
+{
+    wide::integer<256, unsigned> a = wide::integer<256, unsigned>(1) << 200;
+    wide::integer<256, unsigned> b = wide::integer<256, unsigned>(1) << 199;
+
+    EXPECT_TRUE(a > b);
+    EXPECT_TRUE(b < a);
+    EXPECT_TRUE(a >= a);
+    EXPECT_TRUE(a != b);
+}
+
+TEST(WideInteger512, Arithmetic)
+{
+    wide::integer<512, unsigned> base = wide::integer<512, unsigned>(1) << 400;
+    wide::integer<512, unsigned> small = 123456789U;
+
+    auto add = base + small;
+    EXPECT_EQ(
+        wide::to_string(add),
+        "258224987808690858965591917200301187432970579282922351283065935654064762"
+        "2016841194629645353280137831435903171972870950165");
+
+    auto sub = base - small;
+    EXPECT_EQ(
+        wide::to_string(sub),
+        "258224987808690858965591917200301187432970579282922351283065935654064762"
+        "2016841194629645353280137831435903171972624036587");
+
+    auto mul = base * small;
+    EXPECT_EQ(
+        wide::to_string(mul),
+        "318796278344251197415438395819030544333617004497395160257373504911314503"
+        "394684917811900059524736434146499864926670201039999729664");
+
+    auto div = base / small;
+    EXPECT_EQ(
+        wide::to_string(div),
+        "209162242028415998220715036740750796161538414289166674570700146473163790"
+        "28915462839630839202209753174739569583109");
+
+    auto lshift = base << 10;
+    EXPECT_EQ(
+        wide::to_string(lshift),
+        "264422387516099439580766123213108415931361873185712487713859518109762316"
+        "4945245383300756841758861139390364848100093433217024");
+
+    auto rshift = base >> 10;
+    EXPECT_EQ(
+        wide::to_string(rshift),
+        "252172839656924666958585856640919128352510331330978858674869077787172619"
+        "3375821479130513040312634601011624191379636224");
+}
+
+TEST(WideInteger512, BitwiseOps)
+{
+    wide::integer<512, unsigned> a = wide::integer<512, unsigned>(1) << 500;
+    wide::integer<512, unsigned> b = wide::integer<512, unsigned>(1) << 400;
+
+    auto orv = a | b;
+    EXPECT_EQ(
+        wide::to_string(orv),
+        "327339060789614187001318969683018140209472895463272070865529437997046350"
+        "2197503778396100751682444804772903525322189716362497394377321296225301275082752");
+
+    auto andv = a & b;
+    EXPECT_EQ(wide::to_string(andv), "0");
+
+    auto xorv = a ^ b;
+    EXPECT_EQ(
+        wide::to_string(xorv),
+        "327339060789614187001318969683018140209472895463272070865529437997046350"
+        "2197503778396100751682444804772903525322189716362497394377321296225301275082752");
+}
+
+TEST(WideInteger512, Comparison)
+{
+    wide::integer<512, unsigned> a = wide::integer<512, unsigned>(1) << 500;
+    wide::integer<512, unsigned> b = wide::integer<512, unsigned>(1) << 400;
+
+    EXPECT_TRUE(a > b);
+    EXPECT_TRUE(b < a);
+    EXPECT_TRUE(a != b);
+    EXPECT_TRUE(a >= a);
+}
