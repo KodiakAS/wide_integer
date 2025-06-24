@@ -57,4 +57,3 @@ TEST(WideIntegerBasic, Bitwise)
     auto d = a | b;
     EXPECT_EQ(wide::to_string(d), "14");
 }
-

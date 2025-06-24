@@ -22,18 +22,18 @@
  * without express or implied warranty.
  */
 
-#include <cstdint>
-#include <limits>
-#include <type_traits>
-#include <initializer_list>
-#include <functional>
-#include <stdexcept>
 #include <bit>
-#include <cmath>
-#include <cfloat>
 #include <cassert>
-#include <tuple>
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
+#include <functional>
+#include <initializer_list>
+#include <limits>
+#include <stdexcept>
 #include <string>
+#include <tuple>
+#include <type_traits>
 #include <fmt/format.h>
 
 // NOLINTBEGIN(*)
@@ -274,7 +274,6 @@ struct hash<wide::integer<Bits, Signed>>;
 // NOLINTEND(*)
 
 
-
 [[noreturn]] inline void throwError(const char * err)
 {
     throw std::runtime_error(err);
@@ -285,17 +284,20 @@ struct hash<wide::integer<Bits, Signed>>;
 
 /// Use same extended double for all platforms
 #if (LDBL_MANT_DIG == 64)
-#define CONSTEXPR_FROM_DOUBLE constexpr
+#    define CONSTEXPR_FROM_DOUBLE constexpr
 using FromDoubleIntermediateType = long double;
 #else
-#include <boost/math/special_functions/fpclassify.hpp>
-#include <boost/multiprecision/cpp_bin_float.hpp>
+#    include <boost/math/special_functions/fpclassify.hpp>
+#    include <boost/multiprecision/cpp_bin_float.hpp>
 /// `wide_integer_from_builtin` can't be constexpr with non-literal `cpp_bin_float_double_extended`
-#define CONSTEXPR_FROM_DOUBLE
+#    define CONSTEXPR_FROM_DOUBLE
 using FromDoubleIntermediateType = boost::multiprecision::cpp_bin_float_double_extended;
 #endif
 
-namespace CityHash_v1_0_2 { struct uint128; }
+namespace CityHash_v1_0_2
+{
+struct uint128;
+}
 
 namespace wide
 {
@@ -317,7 +319,9 @@ using BitInt256 = signed _BitInt(256);
 using BitUInt256 = unsigned _BitInt(256);
 #    pragma clang diagnostic pop
 
-struct Error {};
+struct Error
+{
+};
 
 template <typename Signed>
 struct ConstructBitInt256
@@ -466,11 +470,9 @@ public:
 template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
 struct common_type<wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>
 {
-    using type = std::conditional_t<Bits == Bits2,
-        wide::integer<
-            Bits,
-            std::conditional_t<(std::is_same_v<Signed, Signed2> && std::is_same_v<Signed2, signed>), signed, unsigned>>,
-        std::conditional_t<Bits2<Bits, wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>>;
+    using type = std::conditional_t < Bits == Bits2,
+          wide::integer<Bits, std::conditional_t<(std::is_same_v<Signed, Signed2> && std::is_same_v<Signed2, signed>), signed, unsigned>>,
+          std::conditional_t<Bits2<Bits, wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>>;
 };
 
 template <size_t Bits, typename Signed, typename Arithmetic>
@@ -478,19 +480,17 @@ struct common_type<wide::integer<Bits, Signed>, Arithmetic>
 {
     static_assert(wide::ArithmeticConcept<Arithmetic>());
 
-    using type = std::conditional_t<
-        std::is_floating_point_v<Arithmetic>,
-        Arithmetic,
-        std::conditional_t<
-            sizeof(Arithmetic) * 8 < Bits,
-            wide::integer<Bits, Signed>,
-            std::conditional_t<
-                Bits < sizeof(Arithmetic) * 8,
-                Arithmetic,
-                std::conditional_t<
-                    Bits == sizeof(Arithmetic) * 8 && (std::is_same_v<Signed, signed> || std::is_signed_v<Arithmetic>),
-                    Arithmetic,
-                    wide::integer<Bits, Signed>>>>>;
+    using type = std::conditional_t < std::is_floating_point_v<Arithmetic>, Arithmetic,
+          std::conditional_t<
+              sizeof(Arithmetic) * 8 < Bits,
+              wide::integer<Bits, Signed>,
+              std::conditional_t<Bits<
+                  sizeof(Arithmetic) * 8,
+                  Arithmetic,
+                  std::conditional_t<
+                      Bits == sizeof(Arithmetic) * 8 && (std::is_same_v<Signed, signed> || std::is_signed_v<Arithmetic>),
+                      Arithmetic,
+                      wide::integer<Bits, Signed>>>>>;
 };
 
 template <typename Arithmetic, size_t Bits, typename Signed>
@@ -500,7 +500,7 @@ struct common_type<Arithmetic, wide::integer<Bits, Signed>> : common_type<wide::
 
 }
 
-#pragma clang attribute push (__attribute__((no_sanitize("undefined"))), apply_to=function)
+#pragma clang attribute push(__attribute__((no_sanitize("undefined"))), apply_to = function)
 namespace wide
 {
 
@@ -702,9 +702,8 @@ struct integer<Bits, Signed>::_impl
             return;
         }
 
-        const FromDoubleIntermediateType rhs_long_double = (static_cast<FromDoubleIntermediateType>(rhs) < 0)
-            ? -static_cast<FromDoubleIntermediateType>(rhs)
-            : rhs;
+        const FromDoubleIntermediateType rhs_long_double
+            = (static_cast<FromDoubleIntermediateType>(rhs) < 0) ? -static_cast<FromDoubleIntermediateType>(rhs) : rhs;
 
         set_multiplier(self, rhs_long_double);
 
@@ -713,8 +712,7 @@ struct integer<Bits, Signed>::_impl
     }
 
     template <size_t Bits2, typename Signed2>
-    constexpr static void
-    wide_integer_from_wide_integer(integer<Bits, Signed> & self, const integer<Bits2, Signed2> & rhs) noexcept
+    constexpr static void wide_integer_from_wide_integer(integer<Bits, Signed> & self, const integer<Bits2, Signed2> & rhs) noexcept
     {
         constexpr const unsigned min_bits = (Bits < Bits2) ? Bits : Bits2;
         constexpr const unsigned to_copy = min_bits / base_bits;
@@ -836,8 +834,7 @@ private:
     }
 
     template <typename T>
-    constexpr static integer<Bits, Signed>
-    minus(const integer<Bits, Signed> & lhs, T rhs)
+    constexpr static integer<Bits, Signed> minus(const integer<Bits, Signed> & lhs, T rhs)
     {
         constexpr const unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
         constexpr const unsigned op_items = (item_count < rhs_items) ? item_count : rhs_items;
@@ -869,8 +866,7 @@ private:
     }
 
     template <typename T>
-    constexpr static integer<Bits, Signed>
-    plus(const integer<Bits, Signed> & lhs, T rhs)
+    constexpr static integer<Bits, Signed> plus(const integer<Bits, Signed> & lhs, T rhs)
     {
         constexpr const unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
         constexpr const unsigned op_items = (item_count < rhs_items) ? item_count : rhs_items;
@@ -951,8 +947,10 @@ private:
         else if constexpr (Bits == 128 && sizeof(base_type) == 8)
         {
             using CompilerUInt128 = unsigned __int128;
-            CompilerUInt128 a = (CompilerUInt128(lhs.items[little(1)]) << 64) + lhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 b = (CompilerUInt128(rhs.items[little(1)]) << 64) + rhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+            CompilerUInt128 a = (CompilerUInt128(lhs.items[little(1)]) << 64)
+                + lhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+            CompilerUInt128 b = (CompilerUInt128(rhs.items[little(1)]) << 64)
+                + rhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
             CompilerUInt128 c = a * b;
             integer<Bits, Signed> res;
             res.items[little(0)] = c;
@@ -1260,8 +1258,10 @@ public:
         {
             using CompilerUInt128 = unsigned __int128;
 
-            CompilerUInt128 a = (CompilerUInt128(numerator.items[little(1)]) << 64) + numerator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 b = (CompilerUInt128(denominator.items[little(1)]) << 64) + denominator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+            CompilerUInt128 a = (CompilerUInt128(numerator.items[little(1)]) << 64)
+                + numerator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+            CompilerUInt128 b = (CompilerUInt128(denominator.items[little(1)]) << 64)
+                + denominator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
             CompilerUInt128 c = a / b; // NOLINT
 
             integer<Bits, Signed> res;
@@ -1450,7 +1450,7 @@ constexpr integer<Bits, Signed>::integer(T rhs) noexcept
 {
     if constexpr (IsWideInteger<T>::value)
         _impl::wide_integer_from_wide_integer(*this, rhs);
-    else if  constexpr (IsTupleLike<T>::value)
+    else if constexpr (IsTupleLike<T>::value)
         _impl::wide_integer_from_tuple_like(*this, rhs);
     else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
         _impl::wide_integer_from_cityhash_uint128(*this, rhs);
@@ -1467,7 +1467,7 @@ constexpr integer<Bits, Signed>::integer(std::initializer_list<T> il) noexcept
     {
         if constexpr (IsWideInteger<T>::value)
             _impl::wide_integer_from_wide_integer(*this, *il.begin());
-        else if  constexpr (IsTupleLike<T>::value)
+        else if constexpr (IsTupleLike<T>::value)
             _impl::wide_integer_from_tuple_like(*this, *il.begin());
         else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
             _impl::wide_integer_from_cityhash_uint128(*this, *il.begin());
@@ -1506,7 +1506,7 @@ template <size_t Bits, typename Signed>
 template <typename T>
 constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator=(T rhs) noexcept
 {
-    if  constexpr (IsTupleLike<T>::value)
+    if constexpr (IsTupleLike<T>::value)
         _impl::wide_integer_from_tuple_like(*this, rhs);
     else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
         _impl::wide_integer_from_cityhash_uint128(*this, rhs);
@@ -1653,7 +1653,8 @@ constexpr integer<Bits, Signed>::operator T() const noexcept
 
     UnsignedT res{};
     for (unsigned i = 0; i < _impl::item_count && i < (sizeof(T) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
-        res += UnsignedT(items[_impl::little(i)]) << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+        res += UnsignedT(items[_impl::little(i)])
+            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
 
     return res;
 }
@@ -1715,7 +1716,10 @@ constexpr integer<Bits, Signed> operator+(const integer<Bits, Signed> & lhs) noe
 }
 
 #define CT(x) \
-    std::common_type_t<std::decay_t<decltype(rhs)>, std::decay_t<decltype(lhs)>> { x }
+    std::common_type_t<std::decay_t<decltype(rhs)>, std::decay_t<decltype(lhs)>> \
+    { \
+        x \
+    }
 
 // Binary operators
 template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
@@ -1988,7 +1992,8 @@ extern template struct fmt::formatter<Int128>;
 extern template struct fmt::formatter<UInt128>;
 extern template struct fmt::formatter<Int256>;
 extern template struct fmt::formatter<UInt256>;
-namespace wide {
+namespace wide
+{
 template <size_t Bits, typename Signed>
 
 inline std::string to_string(const integer<Bits, Signed> & n)
