@@ -230,3 +230,99 @@ TEST(WideInteger512, Comparison)
     EXPECT_TRUE(a != b);
     EXPECT_TRUE(a >= a);
 }
+
+TEST(WideIntegerExtra, CompoundOperators)
+{
+    wide::integer<128, unsigned> v = 1;
+    v += 2;
+    EXPECT_EQ(v, 3U);
+    v *= 5;
+    EXPECT_EQ(v, 15U);
+    v -= 5;
+    EXPECT_EQ(v, 10U);
+    v /= 2;
+    EXPECT_EQ(v, 5U);
+    v %= 2U;
+    EXPECT_EQ(v, 1U);
+    v |= wide::integer<128, unsigned>(2U);
+    EXPECT_EQ(v, 3U);
+    v &= wide::integer<128, unsigned>(1U);
+    EXPECT_EQ(v, 1U);
+    v ^= wide::integer<128, unsigned>(3U);
+    EXPECT_EQ(v, 2U);
+    v <<= 4;
+    EXPECT_EQ(v, 32U);
+    v >>= 1;
+    EXPECT_EQ(v, 16U);
+}
+
+TEST(WideIntegerExtra, IncDecAndBool)
+{
+    wide::integer<128, unsigned> v = 0;
+    EXPECT_FALSE(static_cast<bool>(v));
+    ++v;
+    EXPECT_EQ(v, 1U);
+    v++;
+    EXPECT_EQ(v, 2U);
+    --v;
+    EXPECT_EQ(v, 1U);
+    v--;
+    EXPECT_EQ(v, 0U);
+    EXPECT_FALSE(static_cast<bool>(v));
+}
+
+TEST(WideIntegerExtra, UnaryAndToString)
+{
+    wide::integer<128, signed> a = -1;
+    auto b = -a;
+    EXPECT_EQ(b, 1);
+    auto c = +b;
+    EXPECT_EQ(c, 1);
+    auto d = ~wide::integer<128, unsigned>(0);
+    EXPECT_EQ(d, (wide::integer<128, unsigned>(-1)));
+
+    std::ostringstream oss;
+    oss << wide::to_string(b);
+    EXPECT_EQ(oss.str(), "1");
+
+    EXPECT_EQ(fmt::format("{}", b), "1");
+}
+
+TEST(WideIntegerExtra, FloatConversion)
+{
+    wide::integer<128, unsigned> v = 123;
+    double d = static_cast<double>(v);
+    EXPECT_NEAR(d, 123.0, 1e-9);
+    float f = static_cast<float>(v);
+    EXPECT_NEAR(f, 123.0f, 1e-6f);
+}
+
+TEST(WideIntegerConversion, UnsignedRoundtrip)
+{
+    wide::integer<128, unsigned> w = 42;
+    uint64_t u = w;
+    EXPECT_EQ(u, 42u);
+    wide::integer<128, unsigned> w2 = u;
+    EXPECT_EQ(w2, w);
+}
+
+TEST(WideIntegerConversion, SignedRoundtrip)
+{
+    wide::integer<128, signed> w = -123;
+    int64_t i = w;
+    EXPECT_EQ(i, -123);
+    wide::integer<128, signed> w2 = i;
+    EXPECT_EQ(w2, w);
+}
+
+TEST(WideIntegerConversion, ArithmeticWithBuiltin)
+{
+    wide::integer<128, unsigned> a = 100;
+    uint64_t b = 20;
+    auto c = a + b;
+    auto d = b + a;
+    auto e = a * b;
+    EXPECT_EQ(wide::to_string(c), "120");
+    EXPECT_EQ(wide::to_string(d), "120");
+    EXPECT_EQ(wide::to_string(e), "2000");
+}
