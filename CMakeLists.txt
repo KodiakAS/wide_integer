@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(wide_integer LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
+
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 
