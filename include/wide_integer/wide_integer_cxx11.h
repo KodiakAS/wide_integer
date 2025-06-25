@@ -51,6 +51,19 @@ public:
         return *this;
     }
 
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    operator T() const
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(T) + 63) / 64; ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+
+        if (std::is_signed<T>::value)
+            return static_cast<T>(static_cast<__int128>(value));
+        else
+            return static_cast<T>(value);
+    }
+
     integer & operator+=(const integer & rhs)
     {
         unsigned __int128 carry = 0;
