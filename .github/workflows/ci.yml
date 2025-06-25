@@ -12,7 +12,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev
+          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev libboost-dev
       - name: Configure
         run: cmake -S . -B build
       - name: Build
