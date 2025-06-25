@@ -5,11 +5,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
 
+set(WI_TEST_OPTIONS -O0 -g)
+set(WI_TEST_LINK_OPTIONS "")
+
 if(ENABLE_COVERAGE)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        add_compile_options(-O0 -g --coverage)
-        add_link_options(--coverage)
+        list(APPEND WI_TEST_OPTIONS --coverage)
+        set(WI_TEST_LINK_OPTIONS --coverage)
     endif()
 endif()
 
@@ -31,46 +34,20 @@ target_compile_features(wide_integer INTERFACE cxx_std_17)
 
 enable_testing()
 include(GoogleTest)
-add_executable(wide_integer_test
-    tests/wide_integer_test.cpp
-)
+function(add_wide_test name source std)
+    add_executable(${name} ${source})
+    target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_compile_features(${name} PRIVATE cxx_std_${std})
+    target_compile_options(${name} PRIVATE ${WI_TEST_OPTIONS})
+    if(WI_TEST_LINK_OPTIONS)
+        target_link_options(${name} PRIVATE ${WI_TEST_LINK_OPTIONS})
+    endif()
+    target_link_libraries(${name} PRIVATE wide_integer fmt::fmt GTest::gtest_main)
+    gtest_discover_tests(${name})
+endfunction()
 
-target_compile_features(wide_integer_test PRIVATE cxx_std_17)
-target_compile_options(wide_integer_test PRIVATE -O0 -g)
-
-target_link_libraries(wide_integer_test PRIVATE wide_integer fmt::fmt GTest::gtest_main)
-
-gtest_discover_tests(wide_integer_test)
-
-add_executable(wide_integer_cxx11_test
-    tests/wide_integer_cxx11_test.cpp
-)
-target_include_directories(wide_integer_cxx11_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_compile_features(wide_integer_cxx11_test PRIVATE cxx_std_11)
-target_compile_options(wide_integer_cxx11_test PRIVATE -O0 -g)
-target_link_libraries(wide_integer_cxx11_test PRIVATE fmt::fmt GTest::gtest_main)
-gtest_discover_tests(wide_integer_cxx11_test)
-
-add_executable(wide_integer_conversion_test
-    tests/wide_integer_conversion_test.cpp
-)
-target_compile_features(wide_integer_conversion_test PRIVATE cxx_std_17)
-target_compile_options(wide_integer_conversion_test PRIVATE -O0 -g)
-target_link_libraries(wide_integer_conversion_test PRIVATE wide_integer fmt::fmt GTest::gtest_main)
-gtest_discover_tests(wide_integer_conversion_test)
-
-add_executable(wide_integer_conversion_cxx11_test
-    tests/wide_integer_conversion_cxx11_test.cpp
-)
-target_include_directories(wide_integer_conversion_cxx11_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_compile_features(wide_integer_conversion_cxx11_test PRIVATE cxx_std_11)
-target_compile_options(wide_integer_conversion_cxx11_test PRIVATE -O0 -g)
-target_link_libraries(wide_integer_conversion_cxx11_test PRIVATE fmt::fmt GTest::gtest_main)
-gtest_discover_tests(wide_integer_conversion_cxx11_test)
+add_wide_test(wide_integer_test tests/wide_integer_test.cpp 17)
+add_wide_test(wide_integer_cxx11_test tests/wide_integer_cxx11_test.cpp 11)
 
 
 add_executable(perf_cxx17
