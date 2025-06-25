@@ -3,6 +3,16 @@ project(wide_integer LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
+option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
+
+if(ENABLE_COVERAGE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "" FORCE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-O0 -g --coverage)
+        add_link_options(--coverage)
+    endif()
+endif()
+
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
 find_package(benchmark REQUIRED)

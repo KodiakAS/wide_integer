@@ -12,15 +12,20 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev
+          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake -S . -B build -DENABLE_COVERAGE=ON
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Debug
       - name: Run tests
         run: |
           cd build
           ctest --output-on-failure
+      - name: Generate coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
+          lcov --list coverage.info
       - name: Check code format
         run: |
           FILES=$(git ls-files '*.cpp' '*.hpp' '*.h')
