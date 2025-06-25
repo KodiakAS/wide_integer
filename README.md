@@ -15,7 +15,7 @@ cd build && ctest
 After running the tests, coverage information can be collected with `lcov`:
 
 ```bash
-lcov --capture --directory build --output-file coverage.info
+lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
 lcov --remove coverage.info '/usr/*' --output-file coverage.info
 lcov --list coverage.info
 ```
