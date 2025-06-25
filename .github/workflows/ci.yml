@@ -12,7 +12,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev
+          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev
       - name: Configure
         run: cmake -S . -B build
       - name: Build
@@ -21,6 +21,10 @@ jobs:
         run: |
           cd build
           ctest --output-on-failure
+      - name: Run benchmarks
+        run: |
+          ./build/perf_cxx17 --benchmark_min_time=0.1s
+          ./build/perf_cxx11 --benchmark_min_time=0.1s
       - name: Check code format
         run: |
           FILES=$(git ls-files '*.cpp' '*.hpp' '*.h')
