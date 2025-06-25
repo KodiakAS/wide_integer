@@ -5,6 +5,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
+find_package(benchmark REQUIRED)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
 
 add_library(wide_integer INTERFACE)
 
@@ -43,16 +48,9 @@ target_include_directories(perf_cxx17 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_features(perf_cxx17 PRIVATE cxx_std_17)
-target_link_libraries(perf_cxx17 PRIVATE fmt::fmt)
+target_link_libraries(perf_cxx17 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
 
-add_executable(perf_cxx20
-    bench/performance.cpp
-)
-target_include_directories(perf_cxx20 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_compile_features(perf_cxx20 PRIVATE cxx_std_20)
-target_link_libraries(perf_cxx20 PRIVATE fmt::fmt)
 
 add_executable(perf_cxx11
     bench/performance.cpp
@@ -62,4 +60,5 @@ target_include_directories(perf_cxx11 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
-target_link_libraries(perf_cxx11 PRIVATE fmt::fmt)
+target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
