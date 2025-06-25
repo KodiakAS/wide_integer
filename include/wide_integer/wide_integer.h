@@ -22,7 +22,6 @@
  * without express or implied warranty.
  */
 
-#include <bit>
 #include <cassert>
 #include <cfloat>
 #include <cmath>
@@ -35,6 +34,15 @@
 #include <tuple>
 #include <type_traits>
 #include <fmt/format.h>
+#include "endian_compat.h"
+
+#if __cplusplus < 202002L
+namespace std
+{
+template <class T>
+using remove_cvref_t = typename remove_cv<typename remove_reference<T>::type>::type;
+}
+#endif
 
 // NOLINTBEGIN(*)
 
@@ -120,8 +128,7 @@ public:
 
     constexpr explicit operator bool() const noexcept;
 
-    template <typename T>
-    requires(std::is_arithmetic_v<T>)
+    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
     constexpr operator T() const noexcept;
 
     constexpr operator long double() const noexcept;
@@ -218,14 +225,12 @@ constexpr integer<Bits, Signed> operator<<(const integer<Bits, Signed> & lhs, in
 template <size_t Bits, typename Signed>
 constexpr integer<Bits, Signed> operator>>(const integer<Bits, Signed> & lhs, int n) noexcept;
 
-template <size_t Bits, typename Signed, typename Int>
-requires(!std::is_same_v<Int, int>)
+template <size_t Bits, typename Signed, typename Int, std::enable_if_t<!std::is_same_v<Int, int>, int> = 0>
 constexpr integer<Bits, Signed> operator<<(const integer<Bits, Signed> & lhs, Int n) noexcept
 {
     return lhs << int(n);
 }
-template <size_t Bits, typename Signed, typename Int>
-requires(!std::is_same_v<Int, int>)
+template <size_t Bits, typename Signed, typename Int, std::enable_if_t<!std::is_same_v<Int, int>, int> = 0>
 constexpr integer<Bits, Signed> operator>>(const integer<Bits, Signed> & lhs, Int n) noexcept
 {
     return lhs >> int(n);
@@ -343,8 +348,7 @@ struct ConstructBitInt256<unsigned>
 
 /// Converts a 256-bit wide integer to Clang's built-in 256-bit integer representation.
 /// The source and target types have the same byte order.
-template <size_t Bits, typename Signed>
-requires(Bits == 256)
+template <size_t Bits, typename Signed, std::enable_if_t<Bits == 256, int> = 0>
 constexpr const auto & toBitInt256(const wide::integer<Bits, Signed> & n)
 {
     using T = ConstructBitInt256<Signed>::Type;
@@ -353,8 +357,7 @@ constexpr const auto & toBitInt256(const wide::integer<Bits, Signed> & n)
 
 /// Converts a Clang's built-in 256-bit integer representation to a 256-bit wide integer.
 /// The source and target types have the same byte order.
-template <typename T>
-requires(std::is_same_v<T, BitInt256> || std::is_same_v<T, BitUInt256>)
+template <typename T, std::enable_if_t<std::is_same_v<T, BitInt256> || std::is_same_v<T, BitUInt256>, int> = 0>
 constexpr const auto & fromBitInt256(const T & n)
 {
     using Signed = std::conditional_t<std::is_same_v<T, BitInt256>, signed, unsigned>;
@@ -1023,7 +1026,7 @@ public:
         {
             if constexpr (use_BitInt256)
             {
-                if constexpr (!std::same_as<T, integer<Bits, Signed>>)
+                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
                 {
                     auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
                     return fromBitInt256(toBitInt256(lhs) + toBitInt256(new_rhs));
@@ -1054,7 +1057,7 @@ public:
         {
             if constexpr (use_BitInt256)
             {
-                if constexpr (!std::same_as<T, integer<Bits, Signed>>)
+                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
                 {
                     auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
                     return fromBitInt256(toBitInt256(lhs) - toBitInt256(new_rhs));
@@ -1085,7 +1088,7 @@ public:
         {
             if constexpr (use_BitInt256)
             {
-                if constexpr (!std::same_as<T, integer<Bits, Signed>>)
+                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
                 {
                     auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
                     return fromBitInt256(toBitInt256(lhs) * toBitInt256(new_rhs));
@@ -1306,7 +1309,7 @@ public:
         {
             if constexpr (use_BitInt256)
             {
-                if constexpr (!std::same_as<T, integer<Bits, Signed>>)
+                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
                 {
                     auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
                     return fromBitInt256(toBitInt256(lhs) / toBitInt256(new_rhs));
@@ -1339,7 +1342,7 @@ public:
         {
             if constexpr (use_BitInt256)
             {
-                if constexpr (!std::same_as<T, integer<Bits, signed>>)
+                if constexpr (!std::is_same_v<T, integer<Bits, signed>>)
                 {
                     auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
                     return fromBitInt256(toBitInt256(lhs) % toBitInt256(new_rhs));
@@ -1641,8 +1644,7 @@ constexpr integer<Bits, Signed>::operator bool() const noexcept
 }
 
 template <size_t Bits, typename Signed>
-template <class T>
-requires(std::is_arithmetic_v<T>)
+template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int>>
 constexpr integer<Bits, Signed>::operator T() const noexcept
 {
     static_assert(std::numeric_limits<T>::is_integer);
