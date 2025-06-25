@@ -21,10 +21,6 @@ jobs:
         run: |
           cd build
           ctest --output-on-failure
-      - name: Run benchmarks
-        run: |
-          ./build/perf_cxx17 --benchmark_min_time=0.1s
-          ./build/perf_cxx11 --benchmark_min_time=0.1s
       - name: Check code format
         run: |
           FILES=$(git ls-files '*.cpp' '*.hpp' '*.h')
