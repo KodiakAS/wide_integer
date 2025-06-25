@@ -230,3 +230,42 @@ TEST(WideInteger512, Comparison)
     EXPECT_TRUE(a != b);
     EXPECT_TRUE(a >= a);
 }
+
+TEST(WideIntegerExtraCxx11, CompoundOperators)
+{
+    wide::integer<128, unsigned> v = 1;
+    v += 2;
+    EXPECT_EQ(v, 3U);
+    v *= 5;
+    EXPECT_EQ(v, 15U);
+    v -= 5;
+    EXPECT_EQ(v, 10U);
+    v /= 2;
+    EXPECT_EQ(v, 5U);
+    v %= 2U;
+    EXPECT_EQ(v, 1U);
+    v |= wide::integer<128, unsigned>(2U);
+    EXPECT_EQ(v, 3U);
+    v &= wide::integer<128, unsigned>(1U);
+    EXPECT_EQ(v, 1U);
+    v ^= wide::integer<128, unsigned>(3U);
+    EXPECT_EQ(v, 2U);
+    v <<= 4;
+    EXPECT_EQ(v, 32U);
+    v >>= 1;
+    EXPECT_EQ(v, 16U);
+}
+
+
+TEST(WideIntegerExtraCxx11, UnaryAndToString)
+{
+    wide::integer<128, signed> a = -1;
+    auto b = -a;
+    EXPECT_EQ(b, 1);
+    auto d = ~wide::integer<128, unsigned>(0);
+    EXPECT_EQ(d, (wide::integer<128, unsigned>(-1)));
+
+    std::ostringstream oss;
+    oss << wide::to_string(b);
+    EXPECT_EQ(oss.str(), "1");
+}

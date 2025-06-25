@@ -36,7 +36,7 @@ add_executable(wide_integer_test
 )
 
 target_compile_features(wide_integer_test PRIVATE cxx_std_17)
-target_compile_options(wide_integer_test PRIVATE -O3 -DNDEBUG)
+target_compile_options(wide_integer_test PRIVATE -O0 -g)
 
 target_link_libraries(wide_integer_test PRIVATE wide_integer fmt::fmt GTest::gtest_main)
 
@@ -49,7 +49,7 @@ target_include_directories(wide_integer_cxx11_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_features(wide_integer_cxx11_test PRIVATE cxx_std_11)
-target_compile_options(wide_integer_cxx11_test PRIVATE -O3 -DNDEBUG)
+target_compile_options(wide_integer_cxx11_test PRIVATE -O0 -g)
 target_link_libraries(wide_integer_cxx11_test PRIVATE fmt::fmt GTest::gtest_main)
 gtest_discover_tests(wide_integer_cxx11_test)
 
@@ -57,7 +57,7 @@ add_executable(wide_integer_conversion_test
     tests/wide_integer_conversion_test.cpp
 )
 target_compile_features(wide_integer_conversion_test PRIVATE cxx_std_17)
-target_compile_options(wide_integer_conversion_test PRIVATE -O3 -DNDEBUG)
+target_compile_options(wide_integer_conversion_test PRIVATE -O0 -g)
 target_link_libraries(wide_integer_conversion_test PRIVATE wide_integer fmt::fmt GTest::gtest_main)
 gtest_discover_tests(wide_integer_conversion_test)
 
@@ -68,9 +68,10 @@ target_include_directories(wide_integer_conversion_cxx11_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_features(wide_integer_conversion_cxx11_test PRIVATE cxx_std_11)
-target_compile_options(wide_integer_conversion_cxx11_test PRIVATE -O3 -DNDEBUG)
+target_compile_options(wide_integer_conversion_cxx11_test PRIVATE -O0 -g)
 target_link_libraries(wide_integer_conversion_cxx11_test PRIVATE fmt::fmt GTest::gtest_main)
 gtest_discover_tests(wide_integer_conversion_cxx11_test)
+
 
 add_executable(perf_cxx17
     bench/performance.cpp
