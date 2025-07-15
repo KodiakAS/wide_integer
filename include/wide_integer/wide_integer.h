@@ -587,22 +587,42 @@ struct integer<Bits, Signed>::_impl
     template <typename Integral>
     constexpr static void wide_integer_from_builtin(integer<Bits, Signed> & self, Integral rhs) noexcept
     {
-        static_assert(sizeof(Integral) <= sizeof(base_type));
-
-        self.items[little(0)] = _impl::to_Integral(rhs);
-
-        if constexpr (std::is_signed_v<Integral>)
+        if constexpr (sizeof(Integral) <= sizeof(base_type))
         {
-            if (rhs < 0)
+            self.items[little(0)] = _impl::to_Integral(rhs);
+
+            if constexpr (std::is_signed_v<Integral>)
             {
-                for (unsigned i = 1; i < item_count; ++i)
-                    self.items[little(i)] = -1;
-                return;
+                if (rhs < 0)
+                {
+                    for (unsigned i = 1; i < item_count; ++i)
+                        self.items[little(i)] = -1;
+                    return;
+                }
+            }
+
+            for (unsigned i = 1; i < item_count; ++i)
+                self.items[little(i)] = 0;
+        }
+        else
+        {
+            using Unsigned = std::make_unsigned_t<Integral>;
+            Unsigned value = static_cast<Unsigned>(rhs);
+            constexpr unsigned rhs_items = sizeof(Integral) / sizeof(base_type);
+            constexpr unsigned to_copy = rhs_items < item_count ? rhs_items : item_count;
+
+            for (unsigned i = 0; i < to_copy; ++i)
+                self.items[little(i)] = static_cast<base_type>(value >> (i * base_bits));
+
+            if constexpr (item_count > to_copy)
+            {
+                base_type fill = 0;
+                if constexpr (std::is_signed_v<Integral>)
+                    fill = rhs < 0 ? static_cast<base_type>(-1) : 0;
+                for (unsigned i = to_copy; i < item_count; ++i)
+                    self.items[little(i)] = fill;
             }
         }
-
-        for (unsigned i = 1; i < item_count; ++i)
-            self.items[little(i)] = 0;
     }
 
     template <typename TupleLike, size_t i = 0>

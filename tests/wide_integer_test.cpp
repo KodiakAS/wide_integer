@@ -326,3 +326,31 @@ TEST(WideIntegerConversion, ArithmeticWithBuiltin)
     EXPECT_EQ(wide::to_string(d), "120");
     EXPECT_EQ(wide::to_string(e), "2000");
 }
+
+TEST(WideIntegerInt128, UnsignedRoundtrip)
+{
+    unsigned __int128 value = (static_cast<unsigned __int128>(1) << 80) + 42;
+    wide::integer<256, unsigned> w = value;
+    unsigned __int128 back = static_cast<unsigned __int128>(w);
+    EXPECT_EQ(back, value);
+}
+
+TEST(WideIntegerInt128, SignedRoundtrip)
+{
+    __int128 value = -((static_cast<__int128>(1) << 90) + 77);
+    wide::integer<256, signed> w = value;
+    __int128 back = static_cast<__int128>(w);
+    EXPECT_EQ(back, value);
+}
+
+TEST(WideIntegerInt128, Arithmetic)
+{
+    wide::integer<256, unsigned> w = 100;
+    unsigned __int128 b = 20;
+    auto c = w + b;
+    auto d = b + w;
+    auto e = w * b;
+    EXPECT_EQ(wide::to_string(c), "120");
+    EXPECT_EQ(wide::to_string(d), "120");
+    EXPECT_EQ(wide::to_string(e), "2000");
+}
