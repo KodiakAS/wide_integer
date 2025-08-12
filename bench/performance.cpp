@@ -60,12 +60,14 @@ BENCHMARK(BM_Division);
 static std::string to_string_slow(WInt n)
 {
     std::string res;
-    if (WInt::_impl::operator_eq(n, 0U))
+    if (n == 0)
         return "0";
-    while (!WInt::_impl::operator_eq(n, 0U))
+    const WInt ten = 10;
+    while (n != 0)
     {
-        res.insert(res.begin(), '0' + char(WInt::_impl::operator_percent(n, 10U)));
-        n = WInt::_impl::operator_slash(n, 10U);
+        auto digit = static_cast<unsigned>(n % ten);
+        res.insert(res.begin(), char('0' + digit));
+        n /= ten;
     }
     return res;
 }
