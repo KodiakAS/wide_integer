@@ -36,23 +36,23 @@ public:
     static constexpr size_t limbs = detail::storage_count<Bits>::value;
     using limb_type = uint64_t;
 
-    integer() { data_.fill(0); }
+    constexpr integer() noexcept = default;
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    integer(T v)
+    integer(T v) noexcept
     {
         assign(v);
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    integer & operator=(T v)
+    integer & operator=(T v) noexcept
     {
         assign(v);
         return *this;
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    operator T() const
+    operator T() const noexcept
     {
         unsigned __int128 value = 0;
         for (size_t i = 0; i < limbs && i < (sizeof(T) + 63) / 64; ++i)
@@ -64,7 +64,7 @@ public:
             return static_cast<T>(value);
     }
 
-    integer & operator+=(const integer & rhs)
+    integer & operator+=(const integer & rhs) noexcept
     {
         unsigned __int128 carry = 0;
         for (size_t i = 0; i < limbs; ++i)
@@ -76,7 +76,7 @@ public:
         return *this;
     }
 
-    integer & operator-=(const integer & rhs)
+    integer & operator-=(const integer & rhs) noexcept
     {
         unsigned __int128 borrow = 0;
         for (size_t i = 0; i < limbs; ++i)
@@ -88,46 +88,46 @@ public:
         return *this;
     }
 
-    integer & operator&=(const integer & rhs)
+    integer & operator&=(const integer & rhs) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             data_[i] &= rhs.data_[i];
         return *this;
     }
 
-    integer & operator|=(const integer & rhs)
+    integer & operator|=(const integer & rhs) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             data_[i] |= rhs.data_[i];
         return *this;
     }
 
-    integer & operator^=(const integer & rhs)
+    integer & operator^=(const integer & rhs) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             data_[i] ^= rhs.data_[i];
         return *this;
     }
 
-    integer & operator*=(const integer & rhs)
+    integer & operator*=(const integer & rhs) noexcept
     {
         *this = *this * rhs;
         return *this;
     }
 
-    integer & operator/=(const integer & rhs)
+    integer & operator/=(const integer & rhs) noexcept
     {
         *this = *this / rhs;
         return *this;
     }
 
-    integer & operator%=(const integer & rhs)
+    integer & operator%=(const integer & rhs) noexcept
     {
         *this = *this % rhs;
         return *this;
     }
 
-    integer & operator<<=(int n)
+    integer & operator<<=(int n) noexcept
     {
         if (n <= 0)
             return *this;
@@ -153,7 +153,7 @@ public:
         return *this;
     }
 
-    integer & operator>>=(int n)
+    integer & operator>>=(int n) noexcept
     {
         if (n <= 0)
             return *this;
@@ -179,49 +179,49 @@ public:
         return *this;
     }
 
-    friend integer operator+(integer lhs, const integer & rhs)
+    friend integer operator+(integer lhs, const integer & rhs) noexcept
     {
         lhs += rhs;
         return lhs;
     }
 
-    friend integer operator-(integer lhs, const integer & rhs)
+    friend integer operator-(integer lhs, const integer & rhs) noexcept
     {
         lhs -= rhs;
         return lhs;
     }
 
-    friend integer operator&(integer lhs, const integer & rhs)
+    friend integer operator&(integer lhs, const integer & rhs) noexcept
     {
         lhs &= rhs;
         return lhs;
     }
 
-    friend integer operator|(integer lhs, const integer & rhs)
+    friend integer operator|(integer lhs, const integer & rhs) noexcept
     {
         lhs |= rhs;
         return lhs;
     }
 
-    friend integer operator^(integer lhs, const integer & rhs)
+    friend integer operator^(integer lhs, const integer & rhs) noexcept
     {
         lhs ^= rhs;
         return lhs;
     }
 
-    friend integer operator<<(integer lhs, int n)
+    friend integer operator<<(integer lhs, int n) noexcept
     {
         lhs <<= n;
         return lhs;
     }
 
-    friend integer operator>>(integer lhs, int n)
+    friend integer operator>>(integer lhs, int n) noexcept
     {
         lhs >>= n;
         return lhs;
     }
 
-    friend integer operator*(const integer & lhs, const integer & rhs)
+    friend integer operator*(const integer & lhs, const integer & rhs) noexcept
     {
         integer result;
         for (size_t i = 0; i < limbs; ++i)
@@ -239,7 +239,7 @@ public:
         return result;
     }
 
-    friend integer operator/(integer lhs, const integer & rhs)
+    friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
         integer result;
         integer divisor = rhs;
@@ -262,7 +262,7 @@ public:
         return result;
     }
 
-    friend integer operator%(integer lhs, const integer & rhs)
+    friend integer operator%(integer lhs, const integer & rhs) noexcept
     {
         integer q = lhs / rhs;
         q *= rhs;
@@ -270,7 +270,7 @@ public:
         return lhs;
     }
 
-    friend bool operator==(const integer & lhs, const integer & rhs)
+    friend bool operator==(const integer & lhs, const integer & rhs) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             if (lhs.data_[i] != rhs.data_[i])
@@ -278,9 +278,9 @@ public:
         return true;
     }
 
-    friend bool operator!=(const integer & lhs, const integer & rhs) { return !(lhs == rhs); }
+    friend bool operator!=(const integer & lhs, const integer & rhs) noexcept { return !(lhs == rhs); }
 
-    friend bool operator<(const integer & lhs, const integer & rhs)
+    friend bool operator<(const integer & lhs, const integer & rhs) noexcept
     {
         for (size_t i = limbs; i-- > 0;)
         {
@@ -290,20 +290,20 @@ public:
         return false;
     }
 
-    friend bool operator>(const integer & lhs, const integer & rhs) { return rhs < lhs; }
+    friend bool operator>(const integer & lhs, const integer & rhs) noexcept { return rhs < lhs; }
 
-    friend bool operator<=(const integer & lhs, const integer & rhs) { return !(rhs < lhs); }
+    friend bool operator<=(const integer & lhs, const integer & rhs) noexcept { return !(rhs < lhs); }
 
-    friend bool operator>=(const integer & lhs, const integer & rhs) { return !(lhs < rhs); }
+    friend bool operator>=(const integer & lhs, const integer & rhs) noexcept { return !(lhs < rhs); }
 
-    friend integer operator~(integer v)
+    friend integer operator~(integer v) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             v.data_[i] = ~v.data_[i];
         return v;
     }
 
-    friend integer operator-(const integer & v)
+    friend integer operator-(const integer & v) noexcept
     {
         integer res = ~v;
         limb_type carry = 1;
@@ -322,7 +322,7 @@ public:
 
 private:
     template <typename T>
-    void assign(T v)
+    void assign(T v) noexcept
     {
         using ST = typename std::conditional<std::is_signed<T>::value, __int128_t, unsigned __int128>::type;
         ST val = static_cast<ST>(v);
@@ -341,7 +341,7 @@ private:
         }
     }
 
-    bool is_zero() const
+    bool is_zero() const noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
             if (data_[i] != 0)
@@ -349,7 +349,7 @@ private:
         return true;
     }
 
-    limb_type div_mod_small(limb_type div, integer & quotient) const
+    limb_type div_mod_small(limb_type div, integer & quotient) const noexcept
     {
         quotient = integer();
         unsigned __int128 rem = 0;
