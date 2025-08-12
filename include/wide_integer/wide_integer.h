@@ -134,6 +134,8 @@ public:
     constexpr operator long double() const noexcept;
     constexpr operator double() const noexcept;
     constexpr operator float() const noexcept;
+    constexpr operator __int128() const noexcept;
+    constexpr operator unsigned __int128() const noexcept;
 
     struct _impl;
 
@@ -1716,6 +1718,25 @@ template <size_t Bits, typename Signed>
 constexpr integer<Bits, Signed>::operator float() const noexcept
 {
     return static_cast<float>(static_cast<long double>(*this));
+}
+template <size_t Bits, typename Signed>
+constexpr integer<Bits, Signed>::operator __int128() const noexcept
+{
+    unsigned __int128 res{};
+    for (unsigned i = 0; i < _impl::item_count && i < (sizeof(__int128) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
+        res += static_cast<unsigned __int128>(items[_impl::little(i)])
+            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+    return static_cast<__int128>(res);
+}
+
+template <size_t Bits, typename Signed>
+constexpr integer<Bits, Signed>::operator unsigned __int128() const noexcept
+{
+    unsigned __int128 res{};
+    for (unsigned i = 0; i < _impl::item_count && i < (sizeof(unsigned __int128) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
+        res += static_cast<unsigned __int128>(items[_impl::little(i)])
+            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+    return res;
 }
 
 // Unary operators
