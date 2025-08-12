@@ -22,6 +22,7 @@
  * without express or implied warranty.
  */
 
+#include <algorithm>
 #include <cassert>
 #include <cfloat>
 #include <cmath>
@@ -1993,20 +1994,10 @@ namespace wide
 
 template <size_t Bits, typename Signed>
 std::string to_string(const integer<Bits, Signed> & n);
-
-extern template std::string to_string(const Int128 & n);
-extern template std::string to_string(const UInt128 & n);
-extern template std::string to_string(const Int256 & n);
-extern template std::string to_string(const UInt256 & n);
 }
 
 template <size_t Bits, typename Signed>
 std::ostream & operator<<(std::ostream & out, const wide::integer<Bits, Signed> & value);
-
-extern std::ostream & operator<<(std::ostream & out, const Int128 & value);
-extern std::ostream & operator<<(std::ostream & out, const UInt128 & value);
-extern std::ostream & operator<<(std::ostream & out, const Int256 & value);
-extern std::ostream & operator<<(std::ostream & out, const UInt256 & value);
 
 /// See https://fmt.dev/latest/api.html#formatting-user-defined-types
 template <size_t Bits, typename Signed>
@@ -2030,18 +2021,12 @@ struct fmt::formatter<wide::integer<Bits, Signed>>
         return fmt::format_to(ctx.out(), "{}", to_string(value));
     }
 };
-
-extern template struct fmt::formatter<Int128>;
-extern template struct fmt::formatter<UInt128>;
-extern template struct fmt::formatter<Int256>;
-extern template struct fmt::formatter<UInt256>;
 namespace wide
 {
 template <size_t Bits, typename Signed>
 
 inline std::string to_string(const integer<Bits, Signed> & n)
 {
-    std::string res;
     if (integer<Bits, Signed>::_impl::operator_eq(n, 0U))
         return "0";
 
@@ -2052,22 +2037,22 @@ inline std::string to_string(const integer<Bits, Signed> & n)
     else
         t = n;
 
+    std::string res;
+    res.reserve(Bits / 3 + 1);
+    const integer<Bits, unsigned> ten = 10U;
+
     while (!integer<Bits, unsigned>::_impl::operator_eq(t, 0U))
     {
-        res.insert(res.begin(), '0' + char(integer<Bits, unsigned>::_impl::operator_percent(t, 10U)));
-        t = integer<Bits, unsigned>::_impl::operator_slash(t, 10U);
+        auto q = integer<Bits, unsigned>::_impl::divide(t, ten);
+        res.push_back('0' + char(t.items[integer<Bits, unsigned>::_impl::little(0)]));
+        t = q;
     }
 
     if (is_neg)
-        res.insert(res.begin(), '-');
+        res.push_back('-');
+    std::reverse(res.begin(), res.end());
     return res;
 }
-
-template std::string to_string(const integer<128, signed> & n);
-template std::string to_string(const integer<128, unsigned> & n);
-template std::string to_string(const integer<256, signed> & n);
-template std::string to_string(const integer<256, unsigned> & n);
-
 }
 
 template <size_t Bits, typename Signed>
@@ -2075,13 +2060,3 @@ std::ostream & operator<<(std::ostream & out, const wide::integer<Bits, Signed> 
 {
     return out << to_string(value);
 }
-
-std::ostream & operator<<(std::ostream & out, const wide::integer<128, signed> & value);
-std::ostream & operator<<(std::ostream & out, const wide::integer<128, unsigned> & value);
-std::ostream & operator<<(std::ostream & out, const wide::integer<256, signed> & value);
-std::ostream & operator<<(std::ostream & out, const wide::integer<256, unsigned> & value);
-
-template struct fmt::formatter<wide::integer<128, signed>>;
-template struct fmt::formatter<wide::integer<128, unsigned>>;
-template struct fmt::formatter<wide::integer<256, signed>>;
-template struct fmt::formatter<wide::integer<256, unsigned>>;

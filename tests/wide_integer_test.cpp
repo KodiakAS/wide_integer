@@ -58,6 +58,36 @@ TEST(WideIntegerBasic, Bitwise)
     EXPECT_EQ(wide::to_string(d), "14");
 }
 
+TEST(WideIntegerConversion, BuiltinToWide)
+{
+    int a = -42;
+    wide::integer<128, signed> b = a; // implicit from int
+    EXPECT_EQ(wide::to_string(b), "-42");
+
+    unsigned long long c = 42;
+    wide::integer<128, unsigned> d = c; // implicit from unsigned long long
+    EXPECT_EQ(wide::to_string(d), "42");
+}
+
+TEST(WideIntegerConversion, WideToBuiltin)
+{
+    wide::integer<128, unsigned> a = 100;
+    unsigned int b = a; // implicit conversion to builtin
+    EXPECT_EQ(b, 100u);
+
+    wide::integer<128, signed> c = -100;
+    int d = c;
+    EXPECT_EQ(d, -100);
+}
+
+TEST(WideIntegerConversion, MixedArithmetic)
+{
+    wide::integer<128, unsigned> a = 100;
+    unsigned int b = 50;
+    auto c = a + b; // builtin implicitly converted to wide integer
+    EXPECT_EQ(wide::to_string(c), "150");
+}
+
 TEST(WideIntegerAdditional, ShiftRight)
 {
     wide::integer<128, unsigned> a = wide::integer<128, unsigned>(1) << 127;
