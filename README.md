@@ -33,7 +33,6 @@ int main() {
 
 ## Building Tests
 
-```bash
 cmake -S . -B build
 cmake --build build
 cd build && ctest

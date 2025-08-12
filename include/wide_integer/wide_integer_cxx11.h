@@ -2,19 +2,16 @@
 
 #include <array>
 #include <cstdint>
+#include <ostream>
 #include <string>
 #include <type_traits>
+#include <fmt/format.h>
 
 namespace wide
 {
 
 template <size_t Bits, typename Signed>
 class integer;
-
-using Int128 = integer<128, signed>;
-using UInt128 = integer<128, unsigned>;
-using Int256 = integer<256, signed>;
-using UInt256 = integer<256, unsigned>;
 
 template <size_t Bits, typename Signed>
 std::string to_string(const integer<Bits, Signed> & value);
@@ -391,3 +388,34 @@ inline std::string to_string(const integer<Bits, Signed> & v)
 }
 
 } // namespace wide
+
+using Int128 = wide::integer<128, signed>;
+using UInt128 = wide::integer<128, unsigned>;
+using Int256 = wide::integer<256, signed>;
+using UInt256 = wide::integer<256, unsigned>;
+
+template <size_t Bits, typename Signed>
+inline std::ostream & operator<<(std::ostream & out, const wide::integer<Bits, Signed> & value)
+{
+    return out << wide::to_string(value);
+}
+
+template <size_t Bits, typename Signed>
+struct fmt::formatter<wide::integer<Bits, Signed>>
+{
+    template <typename ParseContext>
+    constexpr typename ParseContext::iterator parse(ParseContext & ctx)
+    {
+        auto it = ctx.begin();
+        auto end = ctx.end();
+        if (it != end && *it != '}')
+            throw fmt::format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const wide::integer<Bits, Signed> & value, FormatContext & ctx) -> decltype(ctx.out())
+    {
+        return fmt::format_to(ctx.out(), "{}", wide::to_string(value));
+    }
+};
