@@ -30,8 +30,6 @@ target_include_directories(wide_integer INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_features(wide_integer INTERFACE cxx_std_17)
-
 enable_testing()
 include(GoogleTest)
 function(add_wide_test name source std)
@@ -47,7 +45,7 @@ function(add_wide_test name source std)
 endfunction()
 
 add_wide_test(wide_integer_test tests/wide_integer_test.cpp 17)
-add_wide_test(wide_integer_cxx11_test tests/wide_integer_cxx11_test.cpp 11)
+add_wide_test(wide_integer_cxx11_test tests/wide_integer_test.cpp 11)
 
 
 add_executable(perf_cxx17
@@ -64,7 +62,6 @@ target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
 add_executable(perf_cxx11
     bench/performance.cpp
 )
-target_compile_definitions(perf_cxx11 PRIVATE USE_CXX11_HEADER)
 target_include_directories(perf_cxx11 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -72,12 +69,16 @@ target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
 target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
 target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
 
-add_executable(perf_compare_int128
-    bench/compare_int128.cpp
-)
-target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
-target_include_directories(perf_compare_int128 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
-target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
+find_package(Boost QUIET COMPONENTS multiprecision)
+if(Boost_FOUND)
+    add_executable(perf_compare_int128
+        bench/compare_int128.cpp
+    )
+    target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
+    target_include_directories(perf_compare_int128 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${Boost_INCLUDE_DIRS}
+    )
+    target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
+    target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
+endif()

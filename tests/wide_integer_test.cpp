@@ -385,3 +385,13 @@ TEST(WideIntegerInt128, Arithmetic)
     EXPECT_EQ(wide::to_string(d), "120");
     EXPECT_EQ(wide::to_string(e), "2000");
 }
+TEST(WideIntegerInt128, SimpleAssignment)
+{
+    __int128 s = -10;
+    wide::integer<128, signed> ws = s;
+    EXPECT_EQ(ws, -10);
+
+    unsigned __int128 u = 42;
+    wide::integer<128, unsigned> wu = u;
+    EXPECT_EQ(wu, 42U);
+}
