@@ -151,13 +151,13 @@ private:
 };
 
 template <typename T>
-static constexpr bool ArithmeticConcept() noexcept;
+[[nodiscard]] static constexpr bool ArithmeticConcept() noexcept;
 
 template <class T1, class T2>
 using _only_arithmetic = typename std::enable_if<ArithmeticConcept<T1>() && ArithmeticConcept<T2>()>::type;
 
 template <typename T>
-static constexpr bool IntegralConcept() noexcept;
+[[nodiscard]] static constexpr bool IntegralConcept() noexcept;
 
 template <class T, class T2>
 using _only_integer = typename std::enable_if<IntegralConcept<T>() && IntegralConcept<T2>()>::type;
@@ -310,7 +310,7 @@ struct uint128;
 namespace wide
 {
 
-constexpr bool supportsBitInt256()
+[[nodiscard]] constexpr bool supportsBitInt256() noexcept
 {
 #if defined(__clang__) && defined(__x86_64__)
     return true;
@@ -381,13 +381,13 @@ struct IsWideInteger<wide::integer<Bits, Signed>>
 };
 
 template <typename T>
-static constexpr bool ArithmeticConcept() noexcept
+[[nodiscard]] static constexpr bool ArithmeticConcept() noexcept
 {
     return std::is_arithmetic_v<T> || IsWideInteger<T>::value;
 }
 
 template <typename T>
-static constexpr bool IntegralConcept() noexcept
+[[nodiscard]] static constexpr bool IntegralConcept() noexcept
 {
     return std::is_integral_v<T> || IsWideInteger<T>::value;
 }
