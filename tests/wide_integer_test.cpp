@@ -57,6 +57,7 @@ TEST(WideIntegerBasic, Bitwise)
     auto d = a | b;
     EXPECT_EQ(wide::to_string(d), "14");
 }
+
 TEST(WideIntegerAdditional, ShiftRight)
 {
     wide::integer<128, unsigned> a = wide::integer<128, unsigned>(1) << 127;
@@ -331,7 +332,7 @@ TEST(WideIntegerInt128, UnsignedRoundtrip)
 {
     unsigned __int128 value = (static_cast<unsigned __int128>(1) << 80) + 42;
     wide::integer<256, unsigned> w = value;
-    unsigned __int128 back = static_cast<unsigned __int128>(w);
+    unsigned __int128 back = w;
     EXPECT_EQ(back, value);
 }
 
@@ -339,7 +340,7 @@ TEST(WideIntegerInt128, SignedRoundtrip)
 {
     __int128 value = -((static_cast<__int128>(1) << 90) + 77);
     wide::integer<256, signed> w = value;
-    __int128 back = static_cast<__int128>(w);
+    __int128 back = w;
     EXPECT_EQ(back, value);
 }
 
