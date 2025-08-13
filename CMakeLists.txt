@@ -37,17 +37,20 @@ include(GoogleTest)
 function(add_wide_test name source std)
     add_executable(${name} ${source})
     target_include_directories(${name} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    target_compile_features(${name} PRIVATE cxx_std_${std})
+    set_target_properties(${name} PROPERTIES CXX_STANDARD ${std} CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS YES)
     target_compile_options(${name} PRIVATE ${WI_TEST_OPTIONS})
     if(WI_TEST_LINK_OPTIONS)
         target_link_options(${name} PRIVATE ${WI_TEST_LINK_OPTIONS})
     endif()
-    target_link_libraries(${name} PRIVATE wide_integer fmt::fmt GTest::gtest_main)
+    target_link_libraries(${name} PRIVATE GTest::gtest_main)
     gtest_discover_tests(${name})
 endfunction()
 
 add_wide_test(wide_integer_test tests/wide_integer_test.cpp 17)
-add_wide_test(wide_integer_cxx11_test tests/wide_integer_cxx11_test.cpp 11)
+target_link_libraries(wide_integer_test PRIVATE fmt::fmt)
+add_wide_test(wide_integer_cxx11_test tests/wide_integer_test.cpp 11)
+target_compile_definitions(wide_integer_cxx11_test PRIVATE USE_CXX11_HEADER)
+target_link_libraries(wide_integer_cxx11_test PRIVATE fmt::fmt)
 
 
 add_executable(perf_cxx17

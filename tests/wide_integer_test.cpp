@@ -1,5 +1,11 @@
+#include <fmt/format.h>
 #include <gtest/gtest.h>
-#include <wide_integer/wide_integer.h>
+
+#ifdef USE_CXX11_HEADER
+#    include <wide_integer/wide_integer_cxx11.h>
+#else
+#    include <wide_integer/wide_integer.h>
+#endif
 
 TEST(WideIntegerBasic, Addition)
 {
@@ -307,6 +313,7 @@ TEST(WideIntegerExtra, UnaryAndToString)
     wide::integer<128, signed> a = -1;
     auto b = -a;
     EXPECT_EQ(b, 1);
+
     auto c = +b;
     EXPECT_EQ(c, 1);
     auto d = ~wide::integer<128, unsigned>(0);
@@ -326,6 +333,13 @@ TEST(WideIntegerExtra, FloatConversion)
     EXPECT_NEAR(d, 123.0, 1e-9);
     float f = static_cast<float>(v);
     EXPECT_NEAR(f, 123.0f, 1e-6f);
+
+    float f2 = 456.0f;
+    wide::integer<128, unsigned> w = f2;
+    EXPECT_EQ(w, 456U);
+    double d2 = -789.0;
+    wide::integer<128, signed> s = d2;
+    EXPECT_EQ(s, -789);
 }
 
 TEST(WideIntegerConversion, UnsignedRoundtrip)
@@ -365,7 +379,6 @@ TEST(WideIntegerInt128, UnsignedRoundtrip)
     unsigned __int128 back = w;
     EXPECT_EQ(back, value);
 }
-
 TEST(WideIntegerInt128, SignedRoundtrip)
 {
     __int128 value = -((static_cast<__int128>(1) << 90) + 77);
@@ -373,7 +386,6 @@ TEST(WideIntegerInt128, SignedRoundtrip)
     __int128 back = w;
     EXPECT_EQ(back, value);
 }
-
 TEST(WideIntegerInt128, Arithmetic)
 {
     wide::integer<256, unsigned> w = 100;

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <type_traits>
+#include <fmt/format.h>
 
 namespace wide
 {
@@ -44,6 +46,12 @@ public:
         assign(v);
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    integer(T v) noexcept
+    {
+        assign_float(v);
+    }
+
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     integer & operator=(T v) noexcept
     {
@@ -51,11 +59,18 @@ public:
         return *this;
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    integer & operator=(T v) noexcept
+    {
+        assign_float(v);
+        return *this;
+    }
+
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     operator T() const noexcept
     {
         unsigned __int128 value = 0;
-        for (size_t i = 0; i < limbs && i < (sizeof(T) + 63) / 64; ++i)
+        for (size_t i = 0; i < limbs && i < (sizeof(T) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
             value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
 
         if (std::is_signed<T>::value)
@@ -63,6 +78,25 @@ public:
         else
             return static_cast<T>(value);
     }
+
+    explicit operator long double() const noexcept
+    {
+        if (is_zero())
+            return 0;
+        bool neg = std::is_same<Signed, signed>::value && (data_[limbs - 1] >> 63);
+        integer tmp = neg ? -*this : *this;
+        long double res = 0;
+        for (size_t i = limbs; i-- > 0;)
+        {
+            res *= std::ldexp(1.0L, 64);
+            res += static_cast<long double>(tmp.data_[i]);
+        }
+        return neg ? -res : res;
+    }
+
+    explicit operator double() const noexcept { return static_cast<double>(static_cast<long double>(*this)); }
+
+    explicit operator float() const noexcept { return static_cast<float>(static_cast<long double>(*this)); }
 
     integer & operator+=(const integer & rhs) noexcept
     {
@@ -179,16 +213,81 @@ public:
         return *this;
     }
 
+    integer & operator++() noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            if (++data_[i])
+                break;
+        }
+        return *this;
+    }
+
+    integer operator++(int) noexcept
+    {
+        integer tmp = *this;
+        ++(*this);
+        return tmp;
+    }
+
+    integer & operator--() noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            limb_type old = data_[i];
+            --data_[i];
+            if (old)
+                break;
+        }
+        return *this;
+    }
+
+    integer operator--(int) noexcept
+    {
+        integer tmp = *this;
+        --(*this);
+        return tmp;
+    }
+
+    explicit operator bool() const noexcept { return !is_zero(); }
+
     friend integer operator+(integer lhs, const integer & rhs) noexcept
     {
         lhs += rhs;
         return lhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator+(integer lhs, T rhs) noexcept
+    {
+        lhs += integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator+(T lhs, integer rhs) noexcept
+    {
+        rhs += integer(lhs);
+        return rhs;
+    }
+
     friend integer operator-(integer lhs, const integer & rhs) noexcept
     {
         lhs -= rhs;
         return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator-(integer lhs, T rhs) noexcept
+    {
+        lhs -= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator-(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) - rhs;
     }
 
     friend integer operator&(integer lhs, const integer & rhs) noexcept
@@ -239,6 +338,18 @@ public:
         return result;
     }
 
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator*(integer lhs, T rhs) noexcept
+    {
+        return lhs * integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator*(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) * rhs;
+    }
+
     friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
         integer result;
@@ -270,6 +381,30 @@ public:
         return lhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator/(integer lhs, T rhs) noexcept
+    {
+        return lhs / integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator/(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) / rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator%(integer lhs, T rhs) noexcept
+    {
+        return lhs % integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator%(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) % rhs;
+    }
+
     friend bool operator==(const integer & lhs, const integer & rhs) noexcept
     {
         for (size_t i = 0; i < limbs; ++i)
@@ -279,6 +414,30 @@ public:
     }
 
     friend bool operator!=(const integer & lhs, const integer & rhs) noexcept { return !(lhs == rhs); }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator==(const integer & lhs, T rhs) noexcept
+    {
+        return lhs == integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator==(T lhs, const integer & rhs) noexcept
+    {
+        return integer(lhs) == rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator!=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator!=(T lhs, const integer & rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
 
     friend bool operator<(const integer & lhs, const integer & rhs) noexcept
     {
@@ -318,6 +477,8 @@ public:
         return res;
     }
 
+    friend integer operator+(const integer & v) noexcept { return v; }
+
     friend std::string to_string<>(const integer & v);
 
 private:
@@ -339,6 +500,31 @@ private:
             for (size_t i = (sizeof(T) * 8 + 63) / 64; i < limbs; ++i)
                 data_[i] = ~0ULL;
         }
+    }
+
+    template <typename T>
+    void assign_float(T v) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            data_[i] = 0;
+        if (v == 0)
+            return;
+        bool neg = v < 0;
+        if (neg)
+            v = -v;
+        long double val = static_cast<long double>(v);
+        long double intpart;
+        std::modf(val, &intpart);
+        val = intpart;
+        long double base = std::ldexp(1.0L, 64);
+        for (size_t i = 0; i < limbs && val > 0; ++i)
+        {
+            long double rem = std::fmod(val, base);
+            data_[i] = static_cast<limb_type>(rem);
+            val = std::floor(val / base);
+        }
+        if (neg)
+            *this = -*this;
     }
 
     bool is_zero() const noexcept
@@ -391,3 +577,22 @@ inline std::string to_string(const integer<Bits, Signed> & v)
 }
 
 } // namespace wide
+
+namespace fmt
+{
+template <size_t Bits, typename Signed>
+struct formatter<wide::integer<Bits, Signed>>
+{
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext & ctx) -> typename ParseContext::iterator
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const wide::integer<Bits, Signed> & value, FormatContext & ctx) const -> typename FormatContext::iterator
+    {
+        return fmt::format_to(ctx.out(), "{}", wide::to_string(value));
+    }
+};
+} // namespace fmt
