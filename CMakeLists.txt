@@ -43,7 +43,7 @@ function(add_wide_test name source std)
         target_link_options(${name} PRIVATE ${WI_TEST_LINK_OPTIONS})
     endif()
     target_link_libraries(${name} PRIVATE GTest::gtest_main)
-    gtest_discover_tests(${name})
+    gtest_discover_tests(${name} NO_PRETTY_VALUES)
 endfunction()
 
 add_wide_test(wide_integer_test tests/wide_integer_test.cpp 17)

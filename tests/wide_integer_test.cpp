@@ -63,6 +63,30 @@ struct ArithCase
     const char * expected;
 };
 
+static std::string arith_case_name(const testing::TestParamInfo<ArithCase> & info)
+{
+    std::string op;
+    switch (info.param.op)
+    {
+        case ArithOp::Add:
+            op = "Add";
+            break;
+        case ArithOp::Sub:
+            op = "Sub";
+            break;
+        case ArithOp::Mul:
+            op = "Mul";
+            break;
+        case ArithOp::Div:
+            op = "Div";
+            break;
+        case ArithOp::Mod:
+            op = "Mod";
+            break;
+    }
+    return fmt::format("{}_{}_{}", op, info.param.a, info.param.b);
+}
+
 class WideIntegerArithmeticTest : public ::testing::TestWithParam<ArithCase>
 {
 };
@@ -102,7 +126,8 @@ INSTANTIATE_TEST_SUITE_P(
         ArithCase{ArithOp::Sub, 100, 40, "60"},
         ArithCase{ArithOp::Mul, 10, 20, "200"},
         ArithCase{ArithOp::Div, 200, 10, "20"},
-        ArithCase{ArithOp::Mod, 200, 30, "20"}));
+        ArithCase{ArithOp::Mod, 200, 30, "20"}),
+    arith_case_name);
 
 TEST(WideIntegerBasic, SignedArithmetic)
 {
@@ -137,6 +162,24 @@ struct BitCase
     const char * expected;
 };
 
+static std::string bit_case_name(const testing::TestParamInfo<BitCase> & info)
+{
+    std::string op;
+    switch (info.param.op)
+    {
+        case BitOp::And:
+            op = "And";
+            break;
+        case BitOp::Or:
+            op = "Or";
+            break;
+        case BitOp::Xor:
+            op = "Xor";
+            break;
+    }
+    return fmt::format("{}_{}_{}", op, info.param.a, info.param.b);
+}
+
 class WideIntegerBitwiseTest : public ::testing::TestWithParam<BitCase>
 {
 };
@@ -165,7 +208,8 @@ TEST_P(WideIntegerBitwiseTest, BasicOps)
 INSTANTIATE_TEST_SUITE_P(
     WideIntegerBasic,
     WideIntegerBitwiseTest,
-    ::testing::Values(BitCase{BitOp::And, 10, 12, "8"}, BitCase{BitOp::Or, 10, 12, "14"}, BitCase{BitOp::Xor, 10, 12, "6"}));
+    ::testing::Values(BitCase{BitOp::And, 10, 12, "8"}, BitCase{BitOp::Or, 10, 12, "14"}, BitCase{BitOp::Xor, 10, 12, "6"}),
+    bit_case_name);
 
 TEST(WideIntegerConversion, BuiltinToWide)
 {
