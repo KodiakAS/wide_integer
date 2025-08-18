@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <fmt/format.h>
@@ -19,6 +20,9 @@ using UInt256 = integer<256, unsigned>;
 
 template <size_t Bits, typename Signed>
 std::string to_string(const integer<Bits, Signed> & value);
+
+template <size_t Bits, typename Signed>
+std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value);
 
 namespace detail
 {
@@ -751,6 +755,12 @@ inline std::string to_string(const integer<Bits, Signed> & v)
     if (neg)
         res.insert(res.begin(), '-');
     return res;
+}
+
+template <size_t Bits, typename Signed>
+inline std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value)
+{
+    return out << to_string(value);
 }
 
 } // namespace wide
