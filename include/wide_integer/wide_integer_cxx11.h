@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -29,6 +28,42 @@ struct storage_count
     static_assert(Bits % 64 == 0, "Bits must be multiple of 64");
     static constexpr size_t value = Bits / 64;
 };
+
+template <size_t... I>
+struct index_sequence
+{
+};
+
+template <size_t N, size_t... I>
+struct make_index_sequence : make_index_sequence<N - 1, N - 1, I...>
+{
+};
+
+template <size_t... I>
+struct make_index_sequence<0, I...>
+{
+    using type = index_sequence<I...>;
+};
+
+template <size_t I>
+struct limbs_equal
+{
+    template <typename Int>
+    static constexpr bool eval(const Int & lhs, const Int & rhs) noexcept
+    {
+        return lhs.data_[I] == rhs.data_[I] && limbs_equal<I - 1>::eval(lhs, rhs);
+    }
+};
+
+template <>
+struct limbs_equal<0>
+{
+    template <typename Int>
+    static constexpr bool eval(const Int & lhs, const Int & rhs) noexcept
+    {
+        return lhs.data_[0] == rhs.data_[0];
+    }
+};
 }
 
 template <size_t Bits, typename Signed>
@@ -37,15 +72,33 @@ class integer
 public:
     static constexpr size_t limbs = detail::storage_count<Bits>::value;
     using limb_type = uint64_t;
+    template <size_t>
+    friend struct detail::limbs_equal;
 
     constexpr integer() noexcept = default;
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    integer(T v) noexcept
+    constexpr integer(T v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
     {
-        assign(v);
     }
 
+private:
+    template <typename T, size_t... I>
+    constexpr integer(T v, detail::index_sequence<I...>) noexcept
+        : data_{limb_from<T, I>(v)...}
+    {
+    }
+
+    template <typename T, size_t I>
+    static constexpr limb_type limb_from(T v) noexcept
+    {
+        return I < (sizeof(T) * 8 + 63) / 64
+            ? static_cast<limb_type>((std::is_signed<T>::value ? static_cast<__int128>(v) : static_cast<unsigned __int128>(v)) >> (I * 64))
+            : (std::is_signed<T>::value && v < 0 ? ~0ULL : 0ULL);
+    }
+
+public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     integer(T v) noexcept
     {
@@ -405,35 +458,56 @@ public:
         return integer(lhs) % rhs;
     }
 
-    friend bool operator==(const integer & lhs, const integer & rhs) noexcept
+    friend constexpr bool operator==(const integer & lhs, const integer & rhs) noexcept
     {
-        for (size_t i = 0; i < limbs; ++i)
-            if (lhs.data_[i] != rhs.data_[i])
-                return false;
-        return true;
+        return detail::limbs_equal<limbs - 1>::eval(lhs, rhs);
     }
 
-    friend bool operator!=(const integer & lhs, const integer & rhs) noexcept { return !(lhs == rhs); }
+    friend constexpr bool operator!=(const integer & lhs, const integer & rhs) noexcept { return !(lhs == rhs); }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    friend bool operator==(const integer & lhs, T rhs) noexcept
+    friend constexpr bool operator==(const integer & lhs, T rhs) noexcept
     {
         return lhs == integer(rhs);
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    friend bool operator==(T lhs, const integer & rhs) noexcept
+    friend constexpr bool operator==(T lhs, const integer & rhs) noexcept
     {
         return integer(lhs) == rhs;
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
-    friend bool operator!=(const integer & lhs, T rhs) noexcept
+    friend constexpr bool operator!=(const integer & lhs, T rhs) noexcept
     {
         return !(lhs == rhs);
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend constexpr bool operator!=(T lhs, const integer & rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator==(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(lhs) == static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator==(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(lhs) == static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator!=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend bool operator!=(T lhs, const integer & rhs) noexcept
     {
         return !(lhs == rhs);
@@ -441,6 +515,13 @@ public:
 
     friend bool operator<(const integer & lhs, const integer & rhs) noexcept
     {
+        if (std::is_same<Signed, signed>::value)
+        {
+            bool lhs_neg = lhs.data_[limbs - 1] >> 63;
+            bool rhs_neg = rhs.data_[limbs - 1] >> 63;
+            if (lhs_neg != rhs_neg)
+                return lhs_neg;
+        }
         for (size_t i = limbs; i-- > 0;)
         {
             if (lhs.data_[i] != rhs.data_[i])
@@ -454,6 +535,102 @@ public:
     friend bool operator<=(const integer & lhs, const integer & rhs) noexcept { return !(rhs < lhs); }
 
     friend bool operator>=(const integer & lhs, const integer & rhs) noexcept { return !(lhs < rhs); }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<(const integer & lhs, T rhs) noexcept
+    {
+        return lhs < integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<(T lhs, const integer & rhs) noexcept
+    {
+        return integer(lhs) < rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>(const integer & lhs, T rhs) noexcept
+    {
+        return integer(rhs) < lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>(T lhs, const integer & rhs) noexcept
+    {
+        return rhs < integer(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<=(const integer & lhs, T rhs) noexcept
+    {
+        return !(integer(rhs) < lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<=(T lhs, const integer & rhs) noexcept
+    {
+        return !(rhs < integer(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs < integer(rhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>=(T lhs, const integer & rhs) noexcept
+    {
+        return !(integer(lhs) < rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(lhs) < static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(lhs) < static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(rhs) < static_cast<long double>(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(rhs) < static_cast<long double>(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<=(const integer & lhs, T rhs) noexcept
+    {
+        return !(static_cast<long double>(rhs) < static_cast<long double>(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<=(T lhs, const integer & rhs) noexcept
+    {
+        return !(static_cast<long double>(rhs) < static_cast<long double>(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>=(const integer & lhs, T rhs) noexcept
+    {
+        return !(static_cast<long double>(lhs) < static_cast<long double>(rhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>=(T lhs, const integer & rhs) noexcept
+    {
+        return !(static_cast<long double>(lhs) < static_cast<long double>(rhs));
+    }
 
     friend integer operator~(integer v) noexcept
     {
@@ -548,7 +725,7 @@ private:
         return static_cast<limb_type>(rem);
     }
 
-    std::array<limb_type, limbs> data_{};
+    limb_type data_[limbs] = {};
 };
 
 template <size_t Bits, typename Signed>

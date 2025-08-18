@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
@@ -6,6 +7,44 @@
 #else
 #    include <wide_integer/wide_integer.h>
 #endif
+
+struct A
+{
+};
+struct B
+{
+};
+
+template <typename, typename>
+struct Base;
+
+template <>
+struct Base<A, B>
+{
+    static constexpr wide::integer<256, signed> val = 1;
+};
+
+static_assert(Base<A, B>::val == 1, "template static constexpr initialization failed");
+
+TEST(WideIntegerConstexpr, Construction)
+{
+#if __cplusplus >= 201402L
+    constexpr wide::integer<128, unsigned> a = 42;
+    static_assert(a == 42, "constexpr constructor failed");
+    constexpr wide::integer<128, signed> b = -42;
+    static_assert(b == -42, "constexpr constructor failed");
+    constexpr wide::integer<256, unsigned> c = 1;
+    static_assert(c == 1, "constexpr construction failed");
+    constexpr wide::integer<256, signed> d = -1;
+    static_assert(d == -1, "constexpr construction failed");
+    (void)a;
+    (void)b;
+    (void)c;
+    (void)d;
+#else
+    SUCCEED();
+#endif
+}
 
 TEST(WideIntegerBasic, Addition)
 {
@@ -117,6 +156,72 @@ TEST(WideIntegerAdditional, Comparison)
     EXPECT_TRUE(a <= a);
     EXPECT_TRUE(b >= a);
 }
+
+TEST(WideIntegerAdditional, BuiltinComparison)
+{
+    wide::integer<128, unsigned> a = 5;
+    int32_t iv = 10;
+    int64_t lv = 3;
+    EXPECT_TRUE(a < iv);
+    EXPECT_TRUE(lv < a);
+    EXPECT_TRUE(iv > a);
+    EXPECT_TRUE(a >= lv);
+    wide::integer<128, signed> b = -5;
+    int32_t neg = -10;
+    EXPECT_TRUE(b < 0);
+    EXPECT_TRUE(0 > b);
+    EXPECT_TRUE(neg < b);
+    EXPECT_TRUE(b >= neg);
+}
+
+TEST(WideIntegerComparison, Floating)
+{
+    wide::integer<128, signed> a = -5;
+    wide::integer<128, unsigned> b = 5;
+    float f = -5.0f;
+    double d = 10.0;
+    EXPECT_TRUE(a == f);
+    EXPECT_TRUE(f == a);
+    EXPECT_TRUE(b < d);
+    EXPECT_TRUE(d > b);
+    EXPECT_TRUE(a <= 0.0);
+    EXPECT_TRUE(0.0 >= a);
+}
+
+TEST(WideIntegerConversion, SmallIntegral)
+{
+    int8_t i8 = -7;
+    wide::integer<128, signed> a = i8;
+    EXPECT_EQ(static_cast<int8_t>(a), i8);
+    uint16_t u16 = 60000;
+    wide::integer<128, unsigned> b = u16;
+    EXPECT_EQ(static_cast<uint16_t>(b), u16);
+}
+
+TEST(WideIntegerConversion, FloatingPoint)
+{
+    float f = 42.5f;
+    wide::integer<128, unsigned> a = f;
+    EXPECT_EQ(wide::to_string(a), "42");
+    wide::integer<128, unsigned> b = 100;
+    EXPECT_FLOAT_EQ(static_cast<float>(b), 100.0f);
+    double d = -100.25;
+    wide::integer<128, signed> c = d;
+    EXPECT_EQ(wide::to_string(c), "-100");
+    wide::integer<128, signed> e = -50;
+    EXPECT_DOUBLE_EQ(static_cast<double>(e), -50.0);
+}
+
+#if defined(__SIZEOF_INT128__)
+TEST(WideIntegerConversion, Int128)
+{
+    __int128 v = (static_cast<__int128>(1) << 100) + 123;
+    wide::integer<256, unsigned> a = v;
+    EXPECT_EQ(static_cast<__int128>(a), v);
+    EXPECT_TRUE(a == v);
+    EXPECT_TRUE(v == a);
+}
+#endif
 
 TEST(WideIntegerBoundary, Unsigned256)
 {
