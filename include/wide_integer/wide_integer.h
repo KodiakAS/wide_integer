@@ -1326,6 +1326,19 @@ public:
         return quotient;
     }
 
+    constexpr static base_type div_mod_small(integer<Bits, unsigned> & value, base_type div) noexcept
+    {
+        unsigned __int128 rem = 0;
+        for (unsigned i = 0; i < item_count; ++i)
+        {
+            unsigned idx = big(i);
+            unsigned __int128 cur = (rem << base_bits) + value.items[idx];
+            value.items[idx] = static_cast<base_type>(cur / div);
+            rem = cur % div;
+        }
+        return static_cast<base_type>(rem);
+    }
+
     template <typename T>
     constexpr static auto operator_slash(const integer<Bits, Signed> & lhs, const T & rhs)
     {
@@ -2040,13 +2053,10 @@ inline std::string to_string(const integer<Bits, Signed> & n)
 
     std::string res;
     res.reserve(Bits / 3 + 1);
-    const integer<Bits, unsigned> ten = 10U;
-
     while (!integer<Bits, unsigned>::_impl::operator_eq(t, 0U))
     {
-        auto q = integer<Bits, unsigned>::_impl::divide(t, ten);
-        res.push_back('0' + char(t.items[integer<Bits, unsigned>::_impl::little(0)]));
-        t = q;
+        auto rem = integer<Bits, unsigned>::_impl::div_mod_small(t, 10);
+        res.push_back(static_cast<char>('0' + rem));
     }
 
     if (is_neg)

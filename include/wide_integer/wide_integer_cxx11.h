@@ -68,6 +68,56 @@ struct limbs_equal<0>
         return lhs.data_[0] == rhs.data_[0];
     }
 };
+
+template <size_t I>
+struct add_limbs
+{
+    template <typename Int>
+    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
+    {
+        add_limbs<I - 1>::eval(lhs, rhs, carry);
+        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[I]) + rhs.data_[I] + carry;
+        lhs.data_[I] = static_cast<typename Int::limb_type>(sum);
+        carry = sum >> 64;
+    }
+};
+
+template <>
+struct add_limbs<0>
+{
+    template <typename Int>
+    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
+    {
+        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[0]) + rhs.data_[0] + carry;
+        lhs.data_[0] = static_cast<typename Int::limb_type>(sum);
+        carry = sum >> 64;
+    }
+};
+
+template <size_t I>
+struct sub_limbs
+{
+    template <typename Int>
+    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
+    {
+        sub_limbs<I - 1>::eval(lhs, rhs, borrow);
+        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[I]) - rhs.data_[I] - borrow;
+        lhs.data_[I] = static_cast<typename Int::limb_type>(diff);
+        borrow = (diff >> 127) & 1;
+    }
+};
+
+template <>
+struct sub_limbs<0>
+{
+    template <typename Int>
+    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
+    {
+        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[0]) - rhs.data_[0] - borrow;
+        lhs.data_[0] = static_cast<typename Int::limb_type>(diff);
+        borrow = (diff >> 127) & 1;
+    }
+};
 }
 
 template <size_t Bits, typename Signed>
@@ -78,6 +128,10 @@ public:
     using limb_type = uint64_t;
     template <size_t>
     friend struct detail::limbs_equal;
+    template <size_t>
+    friend struct detail::add_limbs;
+    template <size_t>
+    friend struct detail::sub_limbs;
 
     constexpr integer() noexcept = default;
 
@@ -158,24 +212,14 @@ public:
     integer & operator+=(const integer & rhs) noexcept
     {
         unsigned __int128 carry = 0;
-        for (size_t i = 0; i < limbs; ++i)
-        {
-            unsigned __int128 sum = static_cast<unsigned __int128>(data_[i]) + rhs.data_[i] + carry;
-            data_[i] = static_cast<limb_type>(sum);
-            carry = sum >> 64;
-        }
+        detail::add_limbs<limbs - 1>::eval(*this, rhs, carry);
         return *this;
     }
 
     integer & operator-=(const integer & rhs) noexcept
     {
         unsigned __int128 borrow = 0;
-        for (size_t i = 0; i < limbs; ++i)
-        {
-            unsigned __int128 sub = static_cast<unsigned __int128>(data_[i]) - rhs.data_[i] - borrow;
-            data_[i] = static_cast<limb_type>(sub);
-            borrow = (sub >> 127) & 1;
-        }
+        detail::sub_limbs<limbs - 1>::eval(*this, rhs, borrow);
         return *this;
     }
 
@@ -379,20 +423,53 @@ public:
 
     friend integer operator*(const integer & lhs, const integer & rhs) noexcept
     {
-        integer result;
-        for (size_t i = 0; i < limbs; ++i)
+        if (limbs == 4 && sizeof(limb_type) == 8)
         {
-            unsigned __int128 carry = 0;
-            for (size_t j = 0; j + i < limbs; ++j)
-            {
-                unsigned __int128 cur = result.data_[i + j];
-                cur += static_cast<unsigned __int128>(lhs.data_[i]) * rhs.data_[j];
-                cur += carry;
-                result.data_[i + j] = static_cast<limb_type>(cur);
-                carry = cur >> 64;
-            }
+            using HalfType = unsigned __int128;
+            HalfType a01 = (HalfType(lhs.data_[1]) << 64) + lhs.data_[0];
+            HalfType a23 = (HalfType(lhs.data_[3]) << 64) + lhs.data_[2];
+            HalfType b01 = (HalfType(rhs.data_[1]) << 64) + rhs.data_[0];
+            HalfType b23 = (HalfType(rhs.data_[3]) << 64) + rhs.data_[2];
+
+            HalfType r23 = a23 * b01 + a01 * b23 + HalfType(lhs.data_[1]) * rhs.data_[1];
+            HalfType r01 = HalfType(lhs.data_[0]) * rhs.data_[0];
+            HalfType r12 = (r01 >> 64) + (r23 << 64);
+            HalfType r12_x = HalfType(lhs.data_[1]) * rhs.data_[0];
+
+            integer result;
+            result.data_[0] = static_cast<limb_type>(r01);
+            result.data_[3] = static_cast<limb_type>(r23 >> 64);
+
+            HalfType r12_y = HalfType(lhs.data_[0]) * rhs.data_[1];
+            r12_x += r12_y;
+            if (r12_x < r12_y)
+                ++result.data_[3];
+
+            r12 += r12_x;
+            if (r12 < r12_x)
+                ++result.data_[3];
+
+            result.data_[1] = static_cast<limb_type>(r12);
+            result.data_[2] = static_cast<limb_type>(r12 >> 64);
+            return result;
         }
-        return result;
+        else
+        {
+            integer result;
+            for (size_t i = 0; i < limbs; ++i)
+            {
+                unsigned __int128 carry = 0;
+                for (size_t j = 0; j + i < limbs; ++j)
+                {
+                    unsigned __int128 cur = result.data_[i + j];
+                    cur += static_cast<unsigned __int128>(lhs.data_[i]) * rhs.data_[j];
+                    cur += carry;
+                    result.data_[i + j] = static_cast<limb_type>(cur);
+                    carry = cur >> 64;
+                }
+            }
+            return result;
+        }
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
