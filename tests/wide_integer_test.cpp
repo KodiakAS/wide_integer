@@ -46,31 +46,65 @@ TEST(WideIntegerConstexpr, Construction)
 #endif
 }
 
-TEST(WideIntegerBasic, Addition)
+enum class ArithOp
 {
-    wide::integer<128, unsigned> a = 1;
-    wide::integer<128, unsigned> b = 2;
-    auto c = a + b;
-    EXPECT_EQ(wide::to_string(c), "3");
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod
+};
+
+struct ArithCase
+{
+    ArithOp op;
+    unsigned a;
+    unsigned b;
+    const char * expected;
+};
+
+class WideIntegerArithmeticTest : public ::testing::TestWithParam<ArithCase>
+{
+};
+
+TEST_P(WideIntegerArithmeticTest, BasicOps)
+{
+    const auto param = GetParam();
+    wide::integer<128, unsigned> a = param.a;
+    wide::integer<128, unsigned> b = param.b;
+    wide::integer<128, unsigned> c = 0;
+    switch (param.op)
+    {
+        case ArithOp::Add:
+            c = a + b;
+            break;
+        case ArithOp::Sub:
+            c = a - b;
+            break;
+        case ArithOp::Mul:
+            c = a * b;
+            break;
+        case ArithOp::Div:
+            c = a / b;
+            break;
+        case ArithOp::Mod:
+            c = a % b;
+            break;
+    }
+    EXPECT_EQ(wide::to_string(c), param.expected);
 }
 
-TEST(WideIntegerBasic, Multiplication)
-{
-    wide::integer<128, unsigned> a = 10;
-    wide::integer<128, unsigned> b = 20;
-    auto c = a * b;
-    EXPECT_EQ(wide::to_string(c), "200");
-}
+INSTANTIATE_TEST_SUITE_P(
+    WideIntegerBasic,
+    WideIntegerArithmeticTest,
+    ::testing::Values(
+        ArithCase{ArithOp::Add, 1, 2, "3"},
+        ArithCase{ArithOp::Sub, 100, 40, "60"},
+        ArithCase{ArithOp::Mul, 10, 20, "200"},
+        ArithCase{ArithOp::Div, 200, 10, "20"},
+        ArithCase{ArithOp::Mod, 200, 30, "20"}));
 
-TEST(WideIntegerBasic, Division)
-{
-    wide::integer<128, unsigned> a = 200;
-    wide::integer<128, unsigned> b = 10;
-    auto c = a / b;
-    EXPECT_EQ(wide::to_string(c), "20");
-}
-
-TEST(WideIntegerBasic, Negative)
+TEST(WideIntegerBasic, SignedArithmetic)
 {
     wide::integer<128, signed> a = -5;
     wide::integer<128, signed> b = 2;
@@ -78,30 +112,60 @@ TEST(WideIntegerBasic, Negative)
     EXPECT_EQ(wide::to_string(c), "-3");
 }
 
-TEST(WideIntegerBasic, Subtraction)
-{
-    wide::integer<128, unsigned> a = 100;
-    wide::integer<128, unsigned> b = 40;
-    auto c = a - b;
-    EXPECT_EQ(wide::to_string(c), "60");
-}
-
-TEST(WideIntegerBasic, ShiftLeft)
+TEST(WideIntegerBasic, Shift)
 {
     wide::integer<128, unsigned> a = 1;
-    auto c = a << 100;
-    EXPECT_EQ(wide::to_string(c), "1267650600228229401496703205376");
+    auto left = a << 100;
+    EXPECT_EQ(wide::to_string(left), "1267650600228229401496703205376");
+    auto b = wide::integer<128, unsigned>(1) << 127;
+    auto right = b >> 64;
+    EXPECT_EQ(wide::to_string(right), "9223372036854775808");
 }
 
-TEST(WideIntegerBasic, Bitwise)
+enum class BitOp
 {
-    wide::integer<128, unsigned> a = 10; // 1010
-    wide::integer<128, unsigned> b = 12; // 1100
-    auto c = a & b;
-    EXPECT_EQ(wide::to_string(c), "8");
-    auto d = a | b;
-    EXPECT_EQ(wide::to_string(d), "14");
+    And,
+    Or,
+    Xor
+};
+
+struct BitCase
+{
+    BitOp op;
+    unsigned a;
+    unsigned b;
+    const char * expected;
+};
+
+class WideIntegerBitwiseTest : public ::testing::TestWithParam<BitCase>
+{
+};
+
+TEST_P(WideIntegerBitwiseTest, BasicOps)
+{
+    const auto param = GetParam();
+    wide::integer<128, unsigned> a = param.a;
+    wide::integer<128, unsigned> b = param.b;
+    wide::integer<128, unsigned> c = 0;
+    switch (param.op)
+    {
+        case BitOp::And:
+            c = a & b;
+            break;
+        case BitOp::Or:
+            c = a | b;
+            break;
+        case BitOp::Xor:
+            c = a ^ b;
+            break;
+    }
+    EXPECT_EQ(wide::to_string(c), param.expected);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    WideIntegerBasic,
+    WideIntegerBitwiseTest,
+    ::testing::Values(BitCase{BitOp::And, 10, 12, "8"}, BitCase{BitOp::Or, 10, 12, "14"}, BitCase{BitOp::Xor, 10, 12, "6"}));
 
 TEST(WideIntegerConversion, BuiltinToWide)
 {
@@ -131,13 +195,6 @@ TEST(WideIntegerConversion, MixedArithmetic)
     unsigned int b = 50;
     auto c = a + b; // builtin implicitly converted to wide integer
     EXPECT_EQ(wide::to_string(c), "150");
-}
-
-TEST(WideIntegerAdditional, ShiftRight)
-{
-    wide::integer<128, unsigned> a = wide::integer<128, unsigned>(1) << 127;
-    auto b = a >> 64;
-    EXPECT_EQ(wide::to_string(b), "9223372036854775808");
 }
 
 TEST(WideIntegerAdditional, BitwiseNot)
@@ -429,6 +486,12 @@ TEST(WideIntegerExtra, UnaryAndToString)
     EXPECT_EQ(oss.str(), "1");
 
     EXPECT_EQ(fmt::format("{}", b), "1");
+}
+
+TEST(WideIntegerExtra, LargeToString)
+{
+    auto v = (wide::integer<128, unsigned>(1) << 127) - 1;
+    EXPECT_EQ(wide::to_string(v), "170141183460469231731687303715884105727");
 }
 
 TEST(WideIntegerExtra, FloatConversion)

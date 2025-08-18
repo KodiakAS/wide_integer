@@ -14,8 +14,7 @@ static void BM_Addition(benchmark::State & state)
     WInt b = 987654321;
     for (auto _ : state)
     {
-        WInt c = a + b;
-        benchmark::DoNotOptimize(c);
+        benchmark::DoNotOptimize(a += b);
     }
 }
 
@@ -25,8 +24,7 @@ static void BM_Subtraction(benchmark::State & state)
     WInt b = 123456789;
     for (auto _ : state)
     {
-        WInt c = a - b;
-        benchmark::DoNotOptimize(c);
+        benchmark::DoNotOptimize(a -= b);
     }
 }
 
@@ -36,8 +34,7 @@ static void BM_Multiplication(benchmark::State & state)
     WInt b = 987654321;
     for (auto _ : state)
     {
-        WInt c = a * b;
-        benchmark::DoNotOptimize(c);
+        benchmark::DoNotOptimize(a *= b);
     }
 }
 
@@ -47,8 +44,7 @@ static void BM_Division(benchmark::State & state)
     WInt b = 123456;
     for (auto _ : state)
     {
-        WInt c = a / b;
-        benchmark::DoNotOptimize(c);
+        benchmark::DoNotOptimize(a /= b);
     }
 }
 
@@ -57,42 +53,17 @@ BENCHMARK(BM_Subtraction);
 BENCHMARK(BM_Multiplication);
 BENCHMARK(BM_Division);
 
-static std::string to_string_slow(WInt n)
-{
-    std::string res;
-    if (n == 0)
-        return "0";
-    const WInt ten = 10;
-    while (n != 0)
-    {
-        auto digit = static_cast<unsigned>(n % ten);
-        res.insert(res.begin(), char('0' + digit));
-        n /= ten;
-    }
-    return res;
-}
-
-static void BM_ToStringOld(benchmark::State & state)
-{
-    WInt a = (WInt(1) << 255) + 123456789;
-    for (auto _ : state)
-    {
-        auto s = to_string_slow(a);
-        benchmark::DoNotOptimize(s);
-    }
-}
-
-static void BM_ToStringNew(benchmark::State & state)
+static void BM_ToString(benchmark::State & state)
 {
     WInt a = (WInt(1) << 255) + 123456789;
     for (auto _ : state)
     {
         auto s = wide::to_string(a);
         benchmark::DoNotOptimize(s);
+        a += WInt{1};
     }
 }
 
-BENCHMARK(BM_ToStringOld);
-BENCHMARK(BM_ToStringNew);
+BENCHMARK(BM_ToString);
 
 BENCHMARK_MAIN();
