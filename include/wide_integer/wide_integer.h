@@ -30,6 +30,7 @@
 #include <functional>
 #include <initializer_list>
 #include <limits>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -1994,10 +1995,10 @@ namespace wide
 
 template <size_t Bits, typename Signed>
 std::string to_string(const integer<Bits, Signed> & n);
-}
 
 template <size_t Bits, typename Signed>
-std::ostream & operator<<(std::ostream & out, const wide::integer<Bits, Signed> & value);
+std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value);
+}
 
 /// See https://fmt.dev/latest/api.html#formatting-user-defined-types
 template <size_t Bits, typename Signed>
@@ -2053,10 +2054,10 @@ inline std::string to_string(const integer<Bits, Signed> & n)
     std::reverse(res.begin(), res.end());
     return res;
 }
-}
 
 template <size_t Bits, typename Signed>
-std::ostream & operator<<(std::ostream & out, const wide::integer<Bits, Signed> & value)
+std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value)
 {
     return out << to_string(value);
+}
 }
