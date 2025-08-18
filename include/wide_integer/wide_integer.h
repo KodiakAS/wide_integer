@@ -987,38 +987,28 @@ private:
         else
         {
             integer<Bits, Signed> res{};
-#if 1
-            integer<Bits, Signed> lhs2 = plus(lhs, shift_left(lhs, 1));
-            integer<Bits, Signed> lhs3 = plus(lhs2, shift_left(lhs, 2));
-#endif
+            constexpr unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
             for (unsigned i = 0; i < item_count; ++i)
             {
-                base_type rhs_item = get_item(rhs, little(i));
-                unsigned pos = i * base_bits;
+                base_type lhs_item = lhs.items[little(i)];
+                if (!lhs_item)
+                    continue;
 
-                while (rhs_item)
+                unsigned __int128 carry = 0;
+                for (unsigned j = 0; j < rhs_items && i + j < item_count; ++j)
                 {
-#if 1 /// optimization
-                    if ((rhs_item & 0x7) == 0x7)
-                    {
-                        res = plus(res, shift_left(lhs3, pos));
-                        rhs_item >>= 3;
-                        pos += 3;
-                        continue;
-                    }
+                    unsigned __int128 cur
+                        = static_cast<unsigned __int128>(lhs_item) * get_item(rhs, little(j)) + res.items[little(i + j)] + carry;
+                    res.items[little(i + j)] = static_cast<base_type>(cur);
+                    carry = cur >> base_bits;
+                }
 
-                    if ((rhs_item & 0x3) == 0x3)
-                    {
-                        res = plus(res, shift_left(lhs2, pos));
-                        rhs_item >>= 2;
-                        pos += 2;
-                        continue;
-                    }
-#endif
-                    if (rhs_item & 1)
-                        res = plus(res, shift_left(lhs, pos));
-
-                    rhs_item >>= 1;
+                unsigned pos = i + rhs_items;
+                while (carry && pos < item_count)
+                {
+                    unsigned __int128 cur = static_cast<unsigned __int128>(res.items[little(pos)]) + carry;
+                    res.items[little(pos)] = static_cast<base_type>(cur);
+                    carry = cur >> base_bits;
                     ++pos;
                 }
             }
@@ -1963,7 +1953,6 @@ constexpr bool operator!=(const Arithmetic & lhs, const Arithmetic2 & rhs)
 {
     return CT(lhs) != CT(rhs);
 }
-
 #undef CT
 
 }
