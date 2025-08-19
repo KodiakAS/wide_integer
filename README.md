@@ -43,36 +43,25 @@ int main() {
 ## Building Tests
 
 ```bash
-cmake -S . -B build
-cmake --build build
-cd build && ctest
+make test
 ```
 
 ## Building Benchmarks
 
 ```bash
-cmake -S . -B build
-cmake --build build --target perf_cxx17 perf_cxx11 perf_compare_int128 perf_compare_int128_cxx11
+make bench
 ```
 
 ## Code Coverage
 
-To generate coverage locally, configure the project with the `ENABLE_COVERAGE` option
-and build the tests:
+To generate a coverage report locally:
 
 ```bash
-cmake -S . -B build -DENABLE_COVERAGE=ON
-cmake --build build --config Debug
-cd build && ctest
+make coverage
 ```
 
-After running the tests, coverage information can be collected with `lcov`:
-
-```bash
-lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
-lcov --list coverage.info
-```
+This builds the project with coverage flags, runs the tests, and
+produces a coverage report under the `build-coverage` directory.
 
 Note that function coverage may show as `0%` because this library is header-only
 and templates are instantiated in the test binaries.
