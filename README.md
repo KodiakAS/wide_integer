@@ -1,5 +1,10 @@
 # wide_integer
-wide integer implementation in CH
+A high-performance, header-only library extracted and refined from ClickHouse
+for working with fixed-width integers. It ensures that types like
+`wide::integer<256, true>` occupy exactly 256 bits, supports arithmetic and
+conversions with standard C++ integer types, and depends only on the `fmt`
+library for formatted output. The implementation targets C++17 while offering a
+slightly slower C++11-compatible variant.
 
 ## Performance
 
