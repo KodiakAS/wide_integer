@@ -6,15 +6,28 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v3
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
-      - name: Configure
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install cmake fmt googletest benchmark lcov boost clang-format
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
         run: cmake -S . -B build -DENABLE_COVERAGE=ON
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: cmake -S . -B build
       - name: Build
         run: cmake --build build --config Debug
       - name: Run tests
@@ -22,6 +35,7 @@ jobs:
           cd build
           ctest --output-on-failure
       - name: Generate coverage
+        if: runner.os == 'Linux'
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
           lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
