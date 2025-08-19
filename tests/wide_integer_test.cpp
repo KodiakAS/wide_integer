@@ -609,3 +609,80 @@ TEST(WideIntegerInt128, Arithmetic)
     EXPECT_EQ(wide::to_string(d), "120");
     EXPECT_EQ(wide::to_string(e), "2000");
 }
+
+template <typename T>
+void test_integral_ops()
+{
+    using W = wide::integer<256, signed>;
+    const __int128 ai = 1000;
+    W a = ai;
+    T b = static_cast<T>(123);
+    __int128 bi = static_cast<__int128>(b);
+    EXPECT_EQ(a + b, W(ai + bi));
+    EXPECT_EQ(b + a, W(bi + ai));
+    EXPECT_EQ(a - b, W(ai - bi));
+    EXPECT_EQ(b - a, W(bi - ai));
+    EXPECT_EQ(a * b, W(ai * bi));
+    EXPECT_EQ(b * a, W(bi * ai));
+    EXPECT_EQ(a / b, W(ai / bi));
+    EXPECT_EQ(b / a, W(bi / ai));
+    EXPECT_EQ(a % b, W(ai % bi));
+    EXPECT_EQ(b % a, W(bi % ai));
+    EXPECT_EQ(a & b, W(ai & bi));
+    EXPECT_EQ(b & a, W(ai & bi));
+    EXPECT_EQ(a | b, W(ai | bi));
+    EXPECT_EQ(b | a, W(ai | bi));
+    EXPECT_EQ(a ^ b, W(ai ^ bi));
+    EXPECT_EQ(b ^ a, W(ai ^ bi));
+    EXPECT_TRUE(a > b);
+    EXPECT_TRUE(b < a);
+    EXPECT_TRUE(a >= b);
+    EXPECT_TRUE(b <= a);
+    EXPECT_TRUE(a != b);
+}
+
+template <typename T>
+void test_float_ops()
+{
+    using W = wide::integer<256, signed>;
+    const __int128 ai = 1000;
+    W a = ai;
+    T b = static_cast<T>(123.5);
+    __int128 bi = static_cast<__int128>(b);
+    EXPECT_EQ(a + b, W(ai + bi));
+    EXPECT_EQ(b + a, W(ai + bi));
+    EXPECT_EQ(a - b, W(ai - bi));
+    EXPECT_EQ(b - a, W(bi - ai));
+    EXPECT_EQ(a * b, W(ai * bi));
+    EXPECT_EQ(b * a, W(ai * bi));
+    EXPECT_EQ(a / b, W(ai / bi));
+    EXPECT_EQ(b / a, W(bi / ai));
+    EXPECT_EQ(a % b, W(ai % bi));
+    EXPECT_EQ(b % a, W(bi % ai));
+    EXPECT_TRUE(a > b);
+    EXPECT_TRUE(b < a);
+    EXPECT_TRUE(a >= b);
+    EXPECT_TRUE(b <= a);
+    EXPECT_TRUE(a != b);
+}
+TEST(WideIntegerBuiltin, IntegralTypes)
+{
+    test_integral_ops<int8_t>();
+    test_integral_ops<uint8_t>();
+    test_integral_ops<int16_t>();
+    test_integral_ops<uint16_t>();
+    test_integral_ops<int32_t>();
+    test_integral_ops<uint32_t>();
+    test_integral_ops<int64_t>();
+    test_integral_ops<uint64_t>();
+    test_integral_ops<__int128>();
+    test_integral_ops<unsigned __int128>();
+}
+
+#ifdef USE_CXX11_HEADER
+TEST(WideIntegerBuiltin, FloatingTypes)
+{
+    test_float_ops<float>();
+    test_float_ops<double>();
+}
+#endif

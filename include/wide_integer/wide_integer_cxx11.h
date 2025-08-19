@@ -372,6 +372,20 @@ public:
         return rhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator+(integer lhs, T rhs) noexcept
+    {
+        lhs += integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator+(T lhs, integer rhs) noexcept
+    {
+        rhs += integer(lhs);
+        return rhs;
+    }
+
     friend integer operator-(integer lhs, const integer & rhs) noexcept
     {
         lhs -= rhs;
@@ -391,10 +405,37 @@ public:
         return integer(lhs) - rhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator-(integer lhs, T rhs) noexcept
+    {
+        lhs -= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator-(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) - rhs;
+    }
+
     friend integer operator&(integer lhs, const integer & rhs) noexcept
     {
         lhs &= rhs;
         return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator&(integer lhs, T rhs) noexcept
+    {
+        lhs &= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator&(T lhs, integer rhs) noexcept
+    {
+        rhs &= integer(lhs);
+        return rhs;
     }
 
     friend integer operator|(integer lhs, const integer & rhs) noexcept
@@ -403,10 +444,38 @@ public:
         return lhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator|(integer lhs, T rhs) noexcept
+    {
+        lhs |= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator|(T lhs, integer rhs) noexcept
+    {
+        rhs |= integer(lhs);
+        return rhs;
+    }
+
     friend integer operator^(integer lhs, const integer & rhs) noexcept
     {
         lhs ^= rhs;
         return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator^(integer lhs, T rhs) noexcept
+    {
+        lhs ^= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator^(T lhs, integer rhs) noexcept
+    {
+        rhs ^= integer(lhs);
+        return rhs;
     }
 
     friend integer operator<<(integer lhs, int n) noexcept
@@ -484,6 +553,18 @@ public:
         return integer(lhs) * rhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator*(integer lhs, T rhs) noexcept
+    {
+        return lhs * integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator*(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) * rhs;
+    }
+
     friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
         integer result;
@@ -527,6 +608,18 @@ public:
         return integer(lhs) / rhs;
     }
 
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator/(integer lhs, T rhs) noexcept
+    {
+        return lhs / integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator/(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) / rhs;
+    }
+
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     friend integer operator%(integer lhs, T rhs) noexcept
     {
@@ -534,6 +627,18 @@ public:
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator%(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) % rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator%(integer lhs, T rhs) noexcept
+    {
+        return lhs % integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator%(T lhs, integer rhs) noexcept
     {
         return integer(lhs) % rhs;
