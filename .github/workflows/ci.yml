@@ -21,7 +21,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew update
-          brew install cmake fmt googletest benchmark lcov boost clang-format
+          brew install cmake fmt googletest google-benchmark lcov boost clang-format
       - name: Configure (Linux)
         if: runner.os == 'Linux'
         run: cmake -S . -B build -DENABLE_COVERAGE=ON
