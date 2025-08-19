@@ -1,3 +1,5 @@
+#include <wide_integer/std_compat.h>
+
 #include <benchmark/benchmark.h>
 
 #ifdef USE_CXX11_HEADER

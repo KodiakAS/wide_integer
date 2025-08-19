@@ -1,3 +1,5 @@
+#include <wide_integer/std_compat.h>
+
 #include <benchmark/benchmark.h>
 #include <boost/multiprecision/cpp_int.hpp>
 
