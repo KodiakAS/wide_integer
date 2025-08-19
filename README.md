@@ -3,20 +3,23 @@ wide integer implementation in CH
 
 ## Performance
 
-Benchmarks comparing the C++17 implementation against Boost.Multiprecision
-(`bench/compare_int128.cpp`) show that `wide_integer` performs operations
-efficiently. Sample results measured on a 2.8 GHz CPU are:
+Benchmarks comparing C++11 and C++17 builds of `wide_integer` with
+Boost.Multiprecision (`bench/compare_int128.cpp`) produce the following timings
+on a 2.8 GHz CPU (lower is better):
 
-| Operation              | `wide_integer` | Boost.Multiprecision |
-| ---------------------- | -------------: | -------------------: |
-| 128‑bit addition       |        2004 ns |             2270 ns |
-| 128‑bit multiplication |         223 ns |              220 ns |
-| 256‑bit addition       |        1751 ns |             1864 ns |
-| 256‑bit multiplication |         370 ns |              519 ns |
+| Operation               | C++11 (`wide_integer`) | C++17 (`wide_integer`) | Boost.Multiprecision |
+| ----------------------- | ---------------------: | ---------------------: | -------------------: |
+| 128‑bit addition        |                 1965 ns |                 2040 ns |             2335 ns |
+| 128‑bit subtraction     |                 2053 ns |                 2198 ns |             2324 ns |
+| 128‑bit multiplication  |                  241 ns |                  227 ns |              232 ns |
+| 128‑bit division        |                  494 ns |                  537 ns |              528 ns |
+| 256‑bit addition        |                 1993 ns |                 1848 ns |             2074 ns |
+| 256‑bit subtraction     |                 2410 ns |                 1947 ns |             4019 ns |
+| 256‑bit multiplication  |                  350 ns |                  361 ns |              586 ns |
+| 256‑bit division        |                 4099 ns |                 4114 ns |             1282 ns |
 
-`wide_integer` is ~12% faster for 128‑bit addition and ~29% faster for 256‑bit
-multiplication in this benchmark, while other operations are on par with the
-Boost implementation.
+The looped benchmark highlights that the library provides competitive
+performance against Boost, particularly for 256‑bit multiplication.
 
 ## Quick Start
 
@@ -24,10 +27,11 @@ Boost implementation.
 #include <wide_integer/wide_integer.h>
 
 int main() {
-    wide::integer<256, unsigned> value = 1;
-    value <<= 128;
-    auto s = wide::to_string(value);
-    // use s...
+    wide::integer<256, unsigned> a = 1;
+    wide::integer<256, unsigned> b = 2;
+    auto c = (a << 128) + b;
+    auto low = static_cast<std::uint64_t>(c); // low == 2
+    (void)low;
 }
 ```
 
@@ -43,7 +47,7 @@ cd build && ctest
 
 ```bash
 cmake -S . -B build
-cmake --build build --target perf_cxx17 perf_cxx11 perf_compare_int128
+cmake --build build --target perf_cxx17 perf_cxx11 perf_compare_int128 perf_compare_int128_cxx11
 ```
 
 ## Code Coverage

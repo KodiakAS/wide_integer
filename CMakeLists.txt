@@ -84,3 +84,14 @@ target_include_directories(perf_compare_int128 PRIVATE
 )
 target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
 target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
+
+add_executable(perf_compare_int128_cxx11
+    bench/compare_int128.cpp
+)
+target_compile_definitions(perf_compare_int128_cxx11 PRIVATE USE_CXX11_HEADER)
+target_compile_features(perf_compare_int128_cxx11 PRIVATE cxx_std_11)
+target_include_directories(perf_compare_int128_cxx11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(perf_compare_int128_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_compare_int128_cxx11 PRIVATE -O3 -DNDEBUG)
