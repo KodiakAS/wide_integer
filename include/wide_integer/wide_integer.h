@@ -37,7 +37,13 @@
 #include <type_traits>
 #include <fmt/format.h>
 #include "endian_compat.h"
-#include "std_compat.h"
+#if __cplusplus < 202002L
+namespace std
+{
+template <class T>
+using remove_cvref_t = typename remove_cv<typename remove_reference<T>::type>::type;
+}
+#endif
 
 // NOLINTBEGIN(*)
 

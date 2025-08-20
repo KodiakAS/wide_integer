@@ -4,6 +4,7 @@ project(wide_integer LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 option(ENABLE_COVERAGE "Enable coverage reporting" OFF)
+option(BUILD_BENCHMARK "Build benchmark" ON)
 
 set(WI_TEST_OPTIONS -O0 -g)
 set(WI_TEST_LINK_OPTIONS "")
@@ -18,7 +19,9 @@ endif()
 
 find_package(fmt REQUIRED)
 find_package(GTest REQUIRED)
-find_package(benchmark REQUIRED)
+if(BUILD_BENCHMARK)
+    find_package(benchmark REQUIRED)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
@@ -53,45 +56,46 @@ target_compile_definitions(wide_integer_cxx11_test PRIVATE USE_CXX11_HEADER)
 target_link_libraries(wide_integer_cxx11_test PRIVATE fmt::fmt)
 
 
-add_executable(perf_cxx17
-    bench/performance.cpp
-)
-target_include_directories(perf_cxx17 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_compile_features(perf_cxx17 PRIVATE cxx_std_17)
-target_link_libraries(perf_cxx17 PRIVATE fmt::fmt benchmark::benchmark)
-target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
+if(BUILD_BENCHMARK)
+    add_executable(perf_cxx17
+        bench/performance.cpp
+    )
+    target_include_directories(perf_cxx17 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_compile_features(perf_cxx17 PRIVATE cxx_std_17)
+    target_link_libraries(perf_cxx17 PRIVATE fmt::fmt benchmark::benchmark)
+    target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
 
+    add_executable(perf_cxx11
+        bench/performance.cpp
+    )
+    target_compile_definitions(perf_cxx11 PRIVATE USE_CXX11_HEADER)
+    target_include_directories(perf_cxx11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
+    target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+    target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
 
-add_executable(perf_cxx11
-    bench/performance.cpp
-)
-target_compile_definitions(perf_cxx11 PRIVATE USE_CXX11_HEADER)
-target_include_directories(perf_cxx11 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
-target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
-target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
+    add_executable(perf_compare_int128
+        bench/compare_int128.cpp
+    )
+    target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
+    target_include_directories(perf_compare_int128 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
+    target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
 
-add_executable(perf_compare_int128
-    bench/compare_int128.cpp
-)
-target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
-target_include_directories(perf_compare_int128 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
-target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
-
-add_executable(perf_compare_int128_cxx11
-    bench/compare_int128.cpp
-)
-target_compile_definitions(perf_compare_int128_cxx11 PRIVATE USE_CXX11_HEADER)
-target_compile_features(perf_compare_int128_cxx11 PRIVATE cxx_std_11)
-target_include_directories(perf_compare_int128_cxx11 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-target_link_libraries(perf_compare_int128_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
-target_compile_options(perf_compare_int128_cxx11 PRIVATE -O3 -DNDEBUG)
+    add_executable(perf_compare_int128_cxx11
+        bench/compare_int128.cpp
+    )
+    target_compile_definitions(perf_compare_int128_cxx11 PRIVATE USE_CXX11_HEADER)
+    target_compile_features(perf_compare_int128_cxx11 PRIVATE cxx_std_11)
+    target_include_directories(perf_compare_int128_cxx11 PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    target_link_libraries(perf_compare_int128_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+    target_compile_options(perf_compare_int128_cxx11 PRIVATE -O3 -DNDEBUG)
+endif()
