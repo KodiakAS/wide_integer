@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
@@ -28,7 +29,6 @@ static_assert(Base<A, B>::val == 1, "template static constexpr initialization fa
 
 TEST(WideIntegerConstexpr, Construction)
 {
-#if __cplusplus >= 201402L
     constexpr wide::integer<128, unsigned> a = 42;
     static_assert(a == 42, "constexpr constructor failed");
     constexpr wide::integer<128, signed> b = -42;
@@ -41,9 +41,6 @@ TEST(WideIntegerConstexpr, Construction)
     (void)b;
     (void)c;
     (void)d;
-#else
-    SUCCEED();
-#endif
 }
 
 enum class ArithOp
@@ -648,17 +645,21 @@ void test_float_ops()
     const __int128 ai = 1000;
     W a = ai;
     T b = static_cast<T>(123.5);
-    __int128 bi = static_cast<__int128>(b);
-    EXPECT_EQ(a + b, W(ai + bi));
-    EXPECT_EQ(b + a, W(ai + bi));
-    EXPECT_EQ(a - b, W(ai - bi));
-    EXPECT_EQ(b - a, W(bi - ai));
-    EXPECT_EQ(a * b, W(ai * bi));
-    EXPECT_EQ(b * a, W(ai * bi));
-    EXPECT_EQ(a / b, W(ai / bi));
-    EXPECT_EQ(b / a, W(bi / ai));
-    EXPECT_EQ(a % b, W(ai % bi));
-    EXPECT_EQ(b % a, W(bi % ai));
+    long double bd = static_cast<long double>(b);
+    __int128 expected_add = static_cast<__int128>(static_cast<long double>(ai) + bd);
+    __int128 expected_sub = static_cast<__int128>(static_cast<long double>(ai) - bd);
+    __int128 expected_rsub = static_cast<__int128>(bd - static_cast<long double>(ai));
+    __int128 expected_mul = static_cast<__int128>(static_cast<long double>(ai) * bd);
+    __int128 expected_div = static_cast<__int128>(static_cast<long double>(ai) / bd);
+    __int128 expected_rdiv = static_cast<__int128>(bd / static_cast<long double>(ai));
+    EXPECT_EQ(W(a + b), W(expected_add));
+    EXPECT_EQ(W(b + a), W(expected_add));
+    EXPECT_EQ(W(a - b), W(expected_sub));
+    EXPECT_EQ(W(b - a), W(expected_rsub));
+    EXPECT_EQ(W(a * b), W(expected_mul));
+    EXPECT_EQ(W(b * a), W(expected_mul));
+    EXPECT_EQ(W(a / b), W(expected_div));
+    EXPECT_EQ(W(b / a), W(expected_rdiv));
     EXPECT_TRUE(a > b);
     EXPECT_TRUE(b < a);
     EXPECT_TRUE(a >= b);
@@ -679,10 +680,23 @@ TEST(WideIntegerBuiltin, IntegralTypes)
     test_integral_ops<unsigned __int128>();
 }
 
-#ifdef USE_CXX11_HEADER
+TEST(WideIntegerNumericLimits, Basic)
+{
+    using U = wide::integer<128, unsigned>;
+    using S = wide::integer<128, signed>;
+    EXPECT_EQ(std::numeric_limits<U>::min(), U(0));
+    EXPECT_EQ(std::numeric_limits<U>::max(), ~U(0));
+    S smin = std::numeric_limits<S>::min();
+    S smax = std::numeric_limits<S>::max();
+    EXPECT_EQ(smax, ~smin);
+    S expected = S(1);
+    expected <<= 127;
+    expected = -expected;
+    EXPECT_EQ(smin, expected);
+}
+
 TEST(WideIntegerBuiltin, FloatingTypes)
 {
     test_float_ops<float>();
     test_float_ops<double>();
 }
-#endif

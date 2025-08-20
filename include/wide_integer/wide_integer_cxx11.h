@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <ostream>
 #include <string>
 #include <type_traits>
@@ -132,6 +133,8 @@ public:
     friend struct detail::add_limbs;
     template <size_t>
     friend struct detail::sub_limbs;
+    template <size_t, typename>
+    friend class std::numeric_limits;
 
     constexpr integer() noexcept = default;
 
@@ -375,15 +378,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator+(integer lhs, T rhs) noexcept
     {
-        lhs += integer(rhs);
-        return lhs;
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator+(T lhs, integer rhs) noexcept
     {
-        rhs += integer(lhs);
-        return rhs;
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator-(integer lhs, const integer & rhs) noexcept
@@ -408,14 +413,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator-(integer lhs, T rhs) noexcept
     {
-        lhs -= integer(rhs);
-        return lhs;
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator-(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) - rhs;
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator&(integer lhs, const integer & rhs) noexcept
@@ -556,13 +564,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator*(integer lhs, T rhs) noexcept
     {
-        return lhs * integer(rhs);
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator*(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) * rhs;
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator/(integer lhs, const integer & rhs) noexcept
@@ -611,13 +623,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator/(integer lhs, T rhs) noexcept
     {
-        return lhs / integer(rhs);
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator/(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) / rhs;
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
@@ -913,6 +929,73 @@ private:
 
     limb_type data_[limbs] = {};
 };
+
+} // namespace wide
+
+namespace std
+{
+template <size_t Bits, typename Signed>
+class numeric_limits<wide::integer<Bits, Signed>>
+{
+public:
+    static const bool is_specialized = true;
+    static const bool is_signed = std::is_same<Signed, signed>::value;
+    static const bool is_integer = true;
+    static const bool is_exact = true;
+    static const bool has_infinity = false;
+    static const bool has_quiet_NaN = false;
+    static const bool has_signaling_NaN = true;
+    static const bool has_denorm_loss = false;
+    static const std::float_round_style round_style = std::round_toward_zero;
+    static const bool is_iec559 = false;
+    static const bool is_bounded = true;
+    static const bool is_modulo = true;
+    static const int digits = Bits - (is_signed ? 1 : 0);
+    static const int digits10 = digits * 30103 / 100000;
+    static const int max_digits10 = 0;
+    static const int radix = 2;
+    static const int min_exponent = 0;
+    static const int min_exponent10 = 0;
+    static const int max_exponent = 0;
+    static const int max_exponent10 = 0;
+    static const bool traps = true;
+    static const bool tinyness_before = false;
+
+    static wide::integer<Bits, Signed> min() noexcept
+    {
+        if (is_signed)
+        {
+            typedef wide::integer<Bits, Signed> T;
+            T res;
+            res.data_[T::limbs - 1] = static_cast<typename T::limb_type>(1ULL << 63);
+            return res;
+        }
+        return wide::integer<Bits, Signed>(0);
+    }
+
+    static wide::integer<Bits, Signed> max() noexcept
+    {
+        if (is_signed)
+            return ~min();
+        typedef wide::integer<Bits, Signed> T;
+        T res;
+        for (size_t i = 0; i < T::limbs; ++i)
+            res.data_[i] = std::numeric_limits<typename T::limb_type>::max();
+        return res;
+    }
+
+    static wide::integer<Bits, Signed> lowest() noexcept { return min(); }
+    static wide::integer<Bits, Signed> epsilon() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> round_error() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> infinity() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> quiet_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> signaling_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> denorm_min() noexcept { return wide::integer<Bits, Signed>(0); }
+};
+} // namespace std
+
+namespace wide
+{
 
 template <size_t Bits, typename Signed>
 inline std::string to_string(const integer<Bits, Signed> & v)
