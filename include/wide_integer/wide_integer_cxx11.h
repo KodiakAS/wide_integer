@@ -596,6 +596,19 @@ public:
     friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
         integer result;
+        bool small_divisor = true;
+        for (size_t i = 1; i < limbs; ++i)
+            if (rhs.data_[i] != 0)
+            {
+                small_divisor = false;
+                break;
+            }
+        if (small_divisor)
+        {
+            lhs.div_mod_small(rhs.data_[0], result);
+            return result;
+        }
+
         integer divisor = rhs;
         integer current(1);
         while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
