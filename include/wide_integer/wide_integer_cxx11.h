@@ -595,37 +595,51 @@ public:
 
     friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
+        bool lhs_neg = false;
+        bool rhs_neg = false;
+        integer divisor = rhs;
+        if (std::is_same<Signed, signed>::value)
+        {
+            lhs_neg = lhs.data_[limbs - 1] >> 63;
+            rhs_neg = divisor.data_[limbs - 1] >> 63;
+            if (lhs_neg)
+                lhs = -lhs;
+            if (rhs_neg)
+                divisor = -divisor;
+        }
         integer result;
         bool small_divisor = true;
         for (size_t i = 1; i < limbs; ++i)
-            if (rhs.data_[i] != 0)
+            if (divisor.data_[i] != 0)
             {
                 small_divisor = false;
                 break;
             }
         if (small_divisor)
         {
-            lhs.div_mod_small(rhs.data_[0], result);
-            return result;
+            lhs.div_mod_small(divisor.data_[0], result);
         }
-
-        integer divisor = rhs;
-        integer current(1);
-        while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
+        else
         {
-            divisor <<= 1;
-            current <<= 1;
-        }
-        while (!current.is_zero())
-        {
-            if (!(lhs < divisor))
+            integer current(1);
+            while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
             {
-                lhs -= divisor;
-                result |= current;
+                divisor <<= 1;
+                current <<= 1;
             }
-            divisor >>= 1;
-            current >>= 1;
+            while (!current.is_zero())
+            {
+                if (!(lhs < divisor))
+                {
+                    lhs -= divisor;
+                    result |= current;
+                }
+                divisor >>= 1;
+                current >>= 1;
+            }
         }
+        if (std::is_same<Signed, signed>::value && lhs_neg != rhs_neg)
+            result = -result;
         return result;
     }
 
