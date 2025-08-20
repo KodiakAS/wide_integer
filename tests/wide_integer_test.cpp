@@ -730,3 +730,21 @@ TEST(WideIntegerBuiltin, FloatingTypes)
     test_float_ops<float>();
     test_float_ops<double>();
 }
+
+TEST(WideIntegerDivision, NegativeOperands)
+{
+    using W = wide::integer<128, signed>;
+    auto check = [](long long lhs, long long rhs)
+    {
+        W wl = lhs;
+        W wr = rhs;
+        W q = wl / wr;
+        __int128 expected = static_cast<__int128>(lhs) / static_cast<__int128>(rhs);
+        EXPECT_EQ(q, W(expected));
+    };
+    check(-7, 3);
+    check(7, -3);
+    check(-8, 2);
+    check(-8, -2);
+    check(-1, 2);
+}
