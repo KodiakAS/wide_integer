@@ -607,6 +607,36 @@ TEST(WideIntegerInt128, Arithmetic)
     EXPECT_EQ(wide::to_string(e), "2000");
 }
 
+TEST(WideIntegerInt128, SignedToUnsignedConversion)
+{
+    wide::integer<256, signed> w = 123;
+    unsigned __int128 via_static = static_cast<unsigned __int128>(w);
+    unsigned __int128 via_implicit = w;
+    EXPECT_TRUE(via_static == static_cast<unsigned __int128>(123));
+    EXPECT_TRUE(via_implicit == static_cast<unsigned __int128>(123));
+
+    wide::integer<256, signed> negative = -1;
+    unsigned __int128 static_neg = static_cast<unsigned __int128>(negative);
+    unsigned __int128 implicit_neg = negative;
+    EXPECT_TRUE(static_neg == static_cast<unsigned __int128>(-1));
+    EXPECT_TRUE(implicit_neg == static_cast<unsigned __int128>(-1));
+}
+
+TEST(WideIntegerInt128, SignedConversion)
+{
+    wide::integer<256, signed> w = 123;
+    __int128 via_static = static_cast<__int128>(w);
+    __int128 via_implicit = w;
+    EXPECT_TRUE(via_static == static_cast<__int128>(123));
+    EXPECT_TRUE(via_implicit == static_cast<__int128>(123));
+
+    wide::integer<256, signed> negative = -1;
+    __int128 static_neg = static_cast<__int128>(negative);
+    __int128 implicit_neg = negative;
+    EXPECT_TRUE(static_neg == static_cast<__int128>(-1));
+    EXPECT_TRUE(implicit_neg == static_cast<__int128>(-1));
+}
+
 template <typename T>
 void test_integral_ops()
 {

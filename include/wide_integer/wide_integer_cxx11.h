@@ -193,6 +193,22 @@ public:
             return static_cast<T>(value);
     }
 
+    operator __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(__int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return static_cast<__int128>(value);
+    }
+
+    operator unsigned __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(unsigned __int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return value;
+    }
+
     explicit operator long double() const noexcept
     {
         if (is_zero())
