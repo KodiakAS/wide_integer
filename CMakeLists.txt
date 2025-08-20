@@ -16,7 +16,12 @@ if(ENABLE_COVERAGE)
     endif()
 endif()
 
-find_package(fmt REQUIRED)
+find_package(fmt CONFIG QUIET)
+if(NOT fmt_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(fmt REQUIRED IMPORTED_TARGET fmt)
+    add_library(fmt::fmt ALIAS PkgConfig::fmt)
+endif()
 find_package(GTest REQUIRED)
 find_package(benchmark REQUIRED)
 
