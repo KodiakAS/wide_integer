@@ -318,6 +318,18 @@ TEST(WideIntegerConversion, Int128)
     EXPECT_EQ(static_cast<__int128>(a), v);
     EXPECT_TRUE(a == v);
     EXPECT_TRUE(v == a);
+
+    __int128 neg = -v;
+    wide::integer<256, signed> b = neg;
+    EXPECT_EQ(static_cast<__int128>(b), neg);
+    EXPECT_TRUE(b == neg);
+    EXPECT_TRUE(neg == b);
+
+    unsigned __int128 u = (static_cast<unsigned __int128>(1) << 100) + 123;
+    wide::integer<256, unsigned> c = u;
+    EXPECT_EQ(static_cast<unsigned __int128>(c), u);
+    EXPECT_TRUE(c == u);
+    EXPECT_TRUE(u == c);
 }
 #endif
 

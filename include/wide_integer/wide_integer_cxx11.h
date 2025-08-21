@@ -144,6 +144,16 @@ public:
     {
     }
 
+    constexpr integer(__int128 v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
+
+    constexpr integer(unsigned __int128 v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
+
 private:
     template <typename T, size_t... I>
     constexpr integer(T v, detail::index_sequence<I...>) noexcept
@@ -168,6 +178,18 @@ public:
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     integer & operator=(T v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    integer & operator=(__int128 v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    integer & operator=(unsigned __int128 v) noexcept
     {
         assign(v);
         return *this;
