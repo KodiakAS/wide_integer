@@ -16,11 +16,12 @@ test: $(BUILD_DIR)/Makefile
 
 # Build and run benchmarks
 bench: $(BUILD_DIR)/Makefile
-	cmake --build $(BUILD_DIR) --target perf_cxx17 perf_cxx11 perf_compare_int128 perf_compare_int128_cxx11
-	$(BUILD_DIR)/perf_cxx17
-	$(BUILD_DIR)/perf_cxx11
-	$(BUILD_DIR)/perf_compare_int128
-	$(BUILD_DIR)/perf_compare_int128_cxx11
+        cmake --build $(BUILD_DIR) --target perf_cxx17 perf_cxx11 perf_compare_int128 perf_compare_int128_cxx11 perf_compare_int256_cxx11
+        $(BUILD_DIR)/perf_cxx17
+        $(BUILD_DIR)/perf_cxx11
+        $(BUILD_DIR)/perf_compare_int128
+        $(BUILD_DIR)/perf_compare_int128_cxx11
+        $(BUILD_DIR)/perf_compare_int256_cxx11
 
 # Build, test and generate coverage report
 coverage: $(COVERAGE_DIR)/Makefile
