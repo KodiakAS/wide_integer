@@ -8,23 +8,20 @@ An independent, header-only C++ library built on ClickHouse's wide integer work 
 
 ## Performance
 
-Benchmarks comparing C++11 and C++17 builds of `wide_integer` with
-Boost.Multiprecision (`bench/compare_int128.cpp`) produce the following timings
-on a 2.8 GHz CPU (lower is better):
+Benchmarks on a 2.8 GHz CPU compare the C++11 implementation of
+`wide::integer<256>` against Boost.Multiprecision's `int256_t`. Timings
+are in nanoseconds (lower is better).
 
-| Operation               | C++11 (`wide_integer`) | C++17 (`wide_integer`) | Boost.Multiprecision |
-| ----------------------- | ---------------------: | ---------------------: | -------------------: |
-| 128‑bit addition        |                 1965 ns |                 2040 ns |             2335 ns |
-| 128‑bit subtraction     |                 2053 ns |                 2198 ns |             2324 ns |
-| 128‑bit multiplication  |                  241 ns |                  227 ns |              232 ns |
-| 128‑bit division        |                  494 ns |                  537 ns |              528 ns |
-| 256‑bit addition        |                 1993 ns |                 1848 ns |             2074 ns |
-| 256‑bit subtraction     |                 2410 ns |                 1947 ns |             4019 ns |
-| 256‑bit multiplication  |                  350 ns |                  361 ns |              586 ns |
-| 256‑bit division        |                 4099 ns |                 4114 ns |             1282 ns |
+| Operation (mixed operands) | `wide_integer` | Boost.Multiprecision |
+| ------------------------- | -------------: | -------------------: |
+| Addition                  |        3.70 ns |             10.4 ns |
+| Subtraction               |        4.57 ns |             25.4 ns |
+| Multiplication            |        9.42 ns |             22.3 ns |
+| Division                  |        21.0 ns |              161 ns |
 
-The looped benchmark highlights that the library provides competitive
-performance against Boost, particularly for 256‑bit multiplication.
+`wide_integer` outperforms Boost for most 256‑bit operations; Boost can
+still be faster when operands are very small, particularly for
+multiplication.
 
 ## Quick Start
 

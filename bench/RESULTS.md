@@ -1,110 +1,111 @@
-# Performance comparison
+# Performance benchmarks
 
-This benchmark compares `wide::integer<128>` against GCC's built-in `__int128` and Boost's `uint128_t`. It also
-compares `wide::integer<256>` with Boost's `uint256_t`.
+This directory contains several microbenchmarks for `wide_integer`. Build them
+with:
+
+```bash
+cmake -S . -B build-release-bench -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release-bench --config Release -j$(nproc)
+```
+
+## perf_cxx11
+
+Exercises the C++11 header for basic arithmetic on unsigned integers of 256,
+512 and 1024 bits.
 
 To run:
+
 ```bash
-cmake -S . -B build
-cmake --build build --config Release -j$(nproc)
-./build/perf_compare_int128
-./build/perf_compare_int128_cxx11
-```
-
-Sample output on a 2.8 GHz CPU:
-```
-Benchmark                            Time             CPU   Iterations
-BM_Wide128Addition                2119 ns         2119 ns       335094
-BM_Wide128Subtraction             2190 ns         2190 ns       322166
-BM_Builtin128Addition             2286 ns         2286 ns       307653
-BM_Builtin128Subtraction          2283 ns         2283 ns       306640
-BM_Wide128Multiplication           230 ns          230 ns      3061851
-BM_Wide128Division                 541 ns          541 ns      1286217
-BM_Builtin128Multiplication        226 ns          226 ns      3096622
-BM_Builtin128Division              560 ns          560 ns      1228240
-BM_Boost128Addition               2305 ns         2305 ns       305968
-BM_Boost128Subtraction            2302 ns         2302 ns       303559
-BM_Boost128Multiplication          223 ns          223 ns      3082484
-BM_Boost128Division                573 ns          573 ns      1222177
-BM_Wide256Addition                1807 ns         1807 ns       392372
-BM_Wide256Subtraction             1873 ns         1873 ns       375089
-BM_Boost256Addition               1925 ns         1925 ns       370704
-BM_Boost256Subtraction            3911 ns         3911 ns       185063
-BM_Wide256Multiplication           325 ns          325 ns      2160624
-BM_Wide256Division                1489 ns         1489 ns       474118
-BM_Boost256Multiplication          549 ns          549 ns      1300117
-BM_Boost256Division               1178 ns         1178 ns       598816
-```
-
-Sample output for the C++11 implementation:
-```
-Benchmark                            Time             CPU   Iterations
-BM_Wide128Addition                1837 ns         1837 ns       384807
-BM_Wide128Subtraction             4499 ns         4499 ns       151749
-BM_Builtin128Addition             2306 ns         2306 ns       300732
-BM_Builtin128Subtraction          2326 ns         2326 ns       302106
-BM_Wide128Multiplication           242 ns          242 ns      2955489
-BM_Wide128Division                 554 ns          554 ns      1262717
-BM_Builtin128Multiplication        229 ns          229 ns      3084519
-BM_Builtin128Division              571 ns          571 ns      1230586
-BM_Boost128Addition               2311 ns         2311 ns       301522
-BM_Boost128Subtraction            2311 ns         2311 ns       305205
-BM_Boost128Multiplication          227 ns          227 ns      3115710
-BM_Boost128Division                573 ns          573 ns      1227688
-BM_Wide256Addition                1902 ns         1902 ns       369321
-BM_Wide256Subtraction             2109 ns         2109 ns       333797
-BM_Boost256Addition               1948 ns         1948 ns       365818
-BM_Boost256Subtraction            4138 ns         4138 ns       165978
-BM_Wide256Multiplication           345 ns          345 ns      2039112
-BM_Wide256Division                1021 ns         1021 ns       673262
-BM_Boost256Multiplication          523 ns          523 ns      1348030
-BM_Boost256Division               1266 ns         1266 ns       588112
-```
-
-The looped benchmark makes timing differences more visible. `wide_integer` has
-slightly faster additions than the compiler builtin or Boost types, while its
-256‑bit multiplication remains faster than Boost's implementation.
-
-## C++11 `int256` vs Boost
-
-This benchmark compares the C++11 implementation of `wide::integer<256, signed>`
-against Boost's `int256_t` for a variety of operand sizes and signs.
-
-To run:
-```bash
-cmake -S . -B build
-cmake --build build --config Release -j$(nproc)
-./build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+./build-release-bench/perf_cxx11 --benchmark_min_time=0.01s
 ```
 
 Sample output:
+
+```text
+BM_Addition<256>              3.29 ns         3.29 ns      4646943
+BM_Addition<512>              3.70 ns         3.70 ns      3052343
+BM_Addition<1024>             7.92 ns         7.92 ns      1799859
+BM_Subtraction<256>           3.31 ns         3.31 ns      4322734
+BM_Subtraction<512>           5.27 ns         5.27 ns      2665971
+BM_Subtraction<1024>          12.0 ns         12.0 ns      1247072
+BM_Multiplication<256>        6.06 ns         6.06 ns      2488839
+BM_Multiplication<512>        47.6 ns         47.6 ns       306609
+BM_Multiplication<1024>        177 ns          177 ns        80376
+BM_Division<256>              3.46 ns         3.46 ns      4485783
+BM_Division<512>              11.6 ns         11.6 ns      1219197
+BM_Division<1024>             30.1 ns         30.1 ns       475090
+BM_ToString<256>              2249 ns         2250 ns         6356
+BM_ToString<512>              7183 ns         7184 ns         1923
+BM_ToString<1024>            31816 ns        31819 ns          365
 ```
-----------------------------------------------------------
-Benchmark                Time             CPU   Iterations
-----------------------------------------------------------
-Add/Small/Wide        1.88 ns         1.88 ns      7301764
-Add/Small/Boost       2.30 ns         2.29 ns      6055725
-Add/Large/Wide        2.10 ns         2.10 ns      7171356
-Add/Large/Boost       6.84 ns         6.84 ns      2422954
-Add/Mixed/Wide        1.78 ns         1.78 ns      7806488
-Add/Mixed/Boost       5.76 ns         5.76 ns      2371206
-Sub/Small/Wide        2.81 ns         2.81 ns      5099976
-Sub/Small/Boost       2.89 ns         2.89 ns      4832640
-Sub/Large/Wide        2.81 ns         2.81 ns      4926732
-Sub/Large/Boost       6.57 ns         6.57 ns      2272943
-Sub/Mixed/Wide        2.74 ns         2.74 ns      5297833
-Sub/Mixed/Boost       4.99 ns         4.99 ns      2811051
-Mul/Small/Wide        3.32 ns         3.32 ns      4502986
-Mul/Small/Boost       2.77 ns         2.77 ns      5896269
-Mul/Large/Wide        6.14 ns         6.14 ns      2135381
-Mul/Large/Boost       12.9 ns         12.9 ns      1105486
-Mul/Mixed/Wide        5.77 ns         5.77 ns      2464757
-Mul/Mixed/Boost       14.8 ns         14.8 ns       946250
-Div/Small/Wide        5.48 ns         5.49 ns      2536622
-Div/Small/Boost       9.94 ns         9.94 ns      1329075
-Div/Large/Wide       41.2 ns         41.2 ns       339445
-Div/Large/Boost       54.8 ns         54.8 ns       245143
-Div/Mixed/Wide       20.5 ns         20.5 ns       678880
-Div/Mixed/Boost       60.4 ns         60.4 ns       236945
+
+## perf_cxx17
+
+Uses the C++17 header for the same set of operations.
+
+To run:
+
+```bash
+./build-release-bench/perf_cxx17 --benchmark_min_time=0.01s
 ```
+
+Sample output:
+
+```text
+BM_Addition<256>              1.67 ns         1.67 ns      8693724
+BM_Addition<512>              6.81 ns         6.81 ns      1933469
+BM_Addition<1024>             17.9 ns         17.9 ns       737889
+BM_Subtraction<256>           1.82 ns         1.82 ns      8569431
+BM_Subtraction<512>           5.83 ns         5.83 ns      2500850
+BM_Subtraction<1024>          18.5 ns         18.5 ns       766062
+BM_Multiplication<256>        5.35 ns         5.35 ns      2667776
+BM_Multiplication<512>        48.5 ns         48.5 ns       301766
+BM_Multiplication<1024>        173 ns          172 ns        81792
+BM_Division<256>              20.8 ns         20.8 ns       701581
+BM_Division<512>              65.8 ns         65.8 ns       210376
+BM_Division<1024>              146 ns          146 ns        99127
+BM_ToString<256>              2124 ns         2124 ns         6878
+BM_ToString<512>             10303 ns        10304 ns         1333
+BM_ToString<1024>            49169 ns        49175 ns          284
+```
+
+## perf_compare_int256_cxx11
+
+Compares the C++11 implementation of `wide::integer<256, signed>` against
+Boost.Multiprecision's `int256_t` across different operand sizes and sign
+combinations.
+
+To run:
+
+```bash
+./build-release-bench/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+```
+
+Sample output:
+
+```text
+Add/Mixed/Wide        2.77 ns         2.77 ns      4713990
+Add/Mixed/Boost       8.53 ns         8.53 ns      1547597
+Sub/Small/Wide        4.38 ns         4.38 ns      3229836
+Sub/Small/Boost       4.15 ns         4.15 ns      3483821
+Sub/Large/Wide        4.24 ns         4.24 ns      3280684
+Sub/Large/Boost       9.37 ns         9.37 ns      1562950
+Sub/Mixed/Wide        4.17 ns         4.17 ns      3170684
+Sub/Mixed/Boost       7.46 ns         7.45 ns      1766918
+Mul/Small/Wide        4.10 ns         4.10 ns      3498340
+Mul/Small/Boost       3.65 ns         3.65 ns      5048993
+Mul/Large/Wide        7.91 ns         7.91 ns      1717055
+Mul/Large/Boost       21.1 ns         21.1 ns       730990
+Mul/Mixed/Wide        7.85 ns         7.85 ns      1694435
+Mul/Mixed/Boost       25.1 ns         25.1 ns       713768
+Div/Small/Wide        4.95 ns         4.95 ns      3097557
+Div/Small/Boost       15.5 ns         15.5 ns       945465
+Div/Large/Wide        52.0 ns         52.0 ns       269106
+Div/Large/Boost       87.7 ns         87.7 ns       159911
+Div/Mixed/Wide        24.4 ns         24.4 ns       480030
+Div/Mixed/Boost        111 ns          111 ns       159834
+```
+
+`wide_integer` is faster than Boost for most large or mixed 256‑bit operations,
+while Boost can still win on small-input multiplication and subtraction.
 
