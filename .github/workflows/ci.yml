@@ -6,15 +6,30 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y cmake build-essential clang-format \
+              libfmt-dev libgtest-dev lcov libboost-dev
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew update
+            brew install cmake clang-format fmt googletest boost
+          fi
       - name: Configure
-        run: cmake -S . -B build -DENABLE_COVERAGE=ON
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+          else
+            cmake -S . -B build -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+          fi
       - name: Build
         run: cmake --build build --config Debug
       - name: Run tests
@@ -22,6 +37,7 @@ jobs:
           cd build
           ctest --output-on-failure
       - name: Generate coverage
+        if: matrix.os == 'ubuntu-latest'
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
           lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
@@ -34,3 +50,20 @@ jobs:
             git diff --exit-code
           fi
 
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev libboost-dev
+      - name: Configure
+        run: cmake -S . -B build -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run benchmarks
+        run: |
+          build/perf_cxx17 --benchmark_min_time=0.01s
+          build/perf_cxx11 --benchmark_min_time=0.01s
+          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
