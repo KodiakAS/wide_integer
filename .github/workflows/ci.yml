@@ -1,6 +1,7 @@
+---
 name: CI
 
-on:
+'on':
   push:
     branches: ["**"]
 
@@ -26,9 +27,12 @@ jobs:
       - name: Configure
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+            cmake -S . -B build \
+              -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON \
+              -DWI_BUILD_BENCHMARKS=OFF
           else
-            cmake -S . -B build -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+            cmake -S . -B build \
+              -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
           fi
       - name: Build
         run: cmake --build build --config Debug
@@ -39,8 +43,10 @@ jobs:
       - name: Generate coverage
         if: matrix.os == 'ubuntu-latest'
         run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
+          lcov --capture --directory build --output-file coverage.info \
+            --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/tests/*'
+            --output-file coverage.info
           lcov --list coverage.info
       - name: Check code format
         run: |
@@ -57,7 +63,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev libboost-dev
+          sudo apt-get install -y cmake build-essential libfmt-dev
+            libbenchmark-dev libboost-dev
       - name: Configure
         run: cmake -S . -B build -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON
       - name: Build
@@ -66,7 +73,9 @@ jobs:
         run: |
           build/perf_cxx17 --benchmark_min_time=0.01s
           build/perf_cxx11 --benchmark_min_time=0.01s
-          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s --benchmark_out=perf_compare_int256_cxx11.json --benchmark_out_format=json
+          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+            --benchmark_out=perf_compare_int256_cxx11.json
+            --benchmark_out_format=json
       - name: Summarize perf_compare_int256_cxx11
         run: |
           python - <<'PYTHON'
@@ -74,7 +83,10 @@ jobs:
           import os
           with open('perf_compare_int256_cxx11.json') as f:
               data = json.load(f)
-          lines = ["| Benchmark | CPU Time (ns) | Real Time (ns) |", "|---|---:|---:|"]
+          lines = [
+              "| Benchmark | CPU Time (ns) | Real Time (ns) |",
+              "|---|---:|---:|",
+          ]
           for b in data.get("benchmarks", []):
               name = b.get("name", "")
               cpu = b.get("cpu_time", 0.0)
