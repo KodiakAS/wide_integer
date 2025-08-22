@@ -714,13 +714,43 @@ public:
                 result.data_[0] = static_cast<limb_type>(q);
                 result.data_[1] = static_cast<limb_type>(q >> 64);
             }
-            else if (limbs == 4 && lhs.data_[3] == 0 && lhs.data_[2] == 0 && divisor.data_[3] == 0 && divisor.data_[2] == 0)
+            else if (divisor_limbs <= 2)
             {
-                unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
-                unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
-                unsigned __int128 q = a / b;
-                result.data_[0] = static_cast<limb_type>(q);
-                result.data_[1] = static_cast<limb_type>(q >> 64);
+                size_t lhs_limbs = limbs;
+                while (lhs_limbs > 0 && lhs.data_[lhs_limbs - 1] == 0)
+                    --lhs_limbs;
+                if (lhs_limbs <= 2)
+                {
+                    unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                    unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                    unsigned __int128 q = a / b;
+                    result.data_[0] = static_cast<limb_type>(q);
+                    result.data_[1] = static_cast<limb_type>(q >> 64);
+                }
+                else if (limbs <= 4)
+                {
+                    result = div_large(lhs, divisor, divisor_limbs);
+                }
+                else
+                {
+                    int shift = lhs.highest_bit() - divisor.highest_bit();
+                    integer current(1);
+                    if (shift > 0)
+                    {
+                        divisor <<= shift;
+                        current <<= shift;
+                    }
+                    for (; shift >= 0; --shift)
+                    {
+                        if (!(lhs < divisor))
+                        {
+                            lhs -= divisor;
+                            result |= current;
+                        }
+                        divisor >>= 1;
+                        current >>= 1;
+                    }
+                }
             }
             else if (limbs <= 4)
             {
@@ -1105,7 +1135,17 @@ private:
     limb_type div_mod_small(limb_type div, integer & quotient) const noexcept
     {
         quotient = integer();
-        if (limbs == 2)
+        size_t n = limbs;
+        while (n > 0 && data_[n - 1] == 0)
+            --n;
+        if (n == 0)
+            return 0;
+        if (n == 1)
+        {
+            quotient.data_[0] = static_cast<limb_type>(data_[0] / div);
+            return static_cast<limb_type>(data_[0] % div);
+        }
+        if (n == 2)
         {
             unsigned __int128 num = (static_cast<unsigned __int128>(data_[1]) << 64) | data_[0];
             unsigned __int128 q = num / div;
@@ -1113,36 +1153,8 @@ private:
             quotient.data_[1] = static_cast<limb_type>(q >> 64);
             return static_cast<limb_type>(num % div);
         }
-        else if (limbs == 4)
-        {
-            if (data_[3] == 0 && data_[2] == 0 && data_[1] == 0)
-            {
-                quotient.data_[0] = static_cast<limb_type>(data_[0] / div);
-                return static_cast<limb_type>(data_[0] % div);
-            }
-            if (data_[3] == 0 && data_[2] == 0)
-            {
-                unsigned __int128 num = (static_cast<unsigned __int128>(data_[1]) << 64) | data_[0];
-                unsigned __int128 q = num / div;
-                quotient.data_[0] = static_cast<limb_type>(q);
-                quotient.data_[1] = static_cast<limb_type>(q >> 64);
-                return static_cast<limb_type>(num % div);
-            }
-            unsigned __int128 num = (static_cast<unsigned __int128>(data_[3]) << 64) | data_[2];
-            unsigned __int128 q = num / div;
-            quotient.data_[2] = static_cast<limb_type>(q);
-            quotient.data_[3] = static_cast<limb_type>(q >> 64);
-            unsigned __int128 rem = num % div;
-            num = (rem << 64) | data_[1];
-            q = num / div;
-            quotient.data_[1] = static_cast<limb_type>(q);
-            rem = num % div;
-            num = (rem << 64) | data_[0];
-            quotient.data_[0] = static_cast<limb_type>(num / div);
-            return static_cast<limb_type>(num % div);
-        }
         unsigned __int128 rem = 0;
-        for (size_t i = limbs; i-- > 0;)
+        for (size_t i = n; i-- > 0;)
         {
             rem = (rem << 64) | data_[i];
             quotient.data_[i] = static_cast<limb_type>(rem / div);
