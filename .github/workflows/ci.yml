@@ -17,13 +17,19 @@ jobs:
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
+            sudo apt-get install -y cmake build-essential clang-format \
+              libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
             brew update
-            brew install cmake clang-format fmt googletest google-benchmark lcov boost
+            brew install cmake clang-format fmt googletest google-benchmark boost
           fi
       - name: Configure
-        run: cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+          else
+            cmake -S . -B build -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+          fi
       - name: Build
         run: cmake --build build --config Debug
       - name: Run tests
@@ -31,6 +37,7 @@ jobs:
           cd build
           ctest --output-on-failure
       - name: Generate coverage
+        if: matrix.os == 'ubuntu-latest'
         run: |
           lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
           lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
