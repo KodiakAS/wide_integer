@@ -18,10 +18,10 @@ jobs:
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
             sudo apt-get install -y cmake build-essential clang-format \
-              libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
+              libfmt-dev libgtest-dev lcov
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
             brew update
-            brew install cmake clang-format fmt googletest google-benchmark boost
+            brew install cmake clang-format fmt googletest
           fi
       - name: Configure
         run: |
@@ -57,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev lcov libboost-dev
+          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev libboost-dev
       - name: Configure
         run: cmake -S . -B build -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON
       - name: Build
@@ -66,7 +66,4 @@ jobs:
         run: |
           build/perf_cxx17 --benchmark_min_time=0.01s
           build/perf_cxx11 --benchmark_min_time=0.01s
-          build/perf_compare_int128 --benchmark_min_time=0.01s
-          build/perf_compare_int128_cxx11 --benchmark_min_time=0.01s
           build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
-          build/perf_compare_int256_random_cxx11 --benchmark_min_time=0.01s
