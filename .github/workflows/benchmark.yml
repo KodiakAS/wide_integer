@@ -1,0 +1,25 @@
+name: Benchmark
+
+on:
+  pull_request:
+
+jobs:
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev libboost-dev jq
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build benchmark
+        run: cmake --build build --target perf_compare_int256_cxx11
+      - name: Run benchmark
+        run: build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s --benchmark_time_unit=ns --benchmark_format=json > perf.json
+      - name: Post results
+        run: |
+          echo "| Benchmark | Real time (ns) | CPU time (ns) | Iterations |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- | --- | --- |" >> $GITHUB_STEP_SUMMARY
+          jq -r '.benchmarks[] | "| \(.name) | " + ((.real_time*100|round/100)|tostring) + " | " + ((.cpu_time*100|round/100)|tostring) + " | \(.iterations) |"' perf.json >> $GITHUB_STEP_SUMMARY
