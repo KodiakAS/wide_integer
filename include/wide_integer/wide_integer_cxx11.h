@@ -643,21 +643,40 @@ public:
         }
         else
         {
-            integer current(1);
-            while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
+            if (limbs == 2)
             {
-                divisor <<= 1;
-                current <<= 1;
+                unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                unsigned __int128 q = a / b;
+                result.data_[0] = static_cast<limb_type>(q);
+                result.data_[1] = static_cast<limb_type>(q >> 64);
             }
-            while (!current.is_zero())
+            else if (limbs == 4 && lhs.data_[3] == 0 && lhs.data_[2] == 0 && divisor.data_[3] == 0 && divisor.data_[2] == 0)
             {
-                if (!(lhs < divisor))
+                unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                unsigned __int128 q = a / b;
+                result.data_[0] = static_cast<limb_type>(q);
+                result.data_[1] = static_cast<limb_type>(q >> 64);
+            }
+            else
+            {
+                integer current(1);
+                while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
                 {
-                    lhs -= divisor;
-                    result |= current;
+                    divisor <<= 1;
+                    current <<= 1;
                 }
-                divisor >>= 1;
-                current >>= 1;
+                while (!current.is_zero())
+                {
+                    if (!(lhs < divisor))
+                    {
+                        lhs -= divisor;
+                        result |= current;
+                    }
+                    divisor >>= 1;
+                    current >>= 1;
+                }
             }
         }
         if (std::is_same<Signed, signed>::value && lhs_neg != rhs_neg)
@@ -982,6 +1001,29 @@ private:
     limb_type div_mod_small(limb_type div, integer & quotient) const noexcept
     {
         quotient = integer();
+        if (limbs == 2)
+        {
+            unsigned __int128 num = (static_cast<unsigned __int128>(data_[1]) << 64) | data_[0];
+            unsigned __int128 q = num / div;
+            quotient.data_[0] = static_cast<limb_type>(q);
+            quotient.data_[1] = static_cast<limb_type>(q >> 64);
+            return static_cast<limb_type>(num % div);
+        }
+        else if (limbs == 4)
+        {
+            unsigned __int128 num = (static_cast<unsigned __int128>(data_[3]) << 64) | data_[2];
+            unsigned __int128 q = num / div;
+            quotient.data_[2] = static_cast<limb_type>(q);
+            quotient.data_[3] = static_cast<limb_type>(q >> 64);
+            unsigned __int128 rem = num % div;
+            num = (rem << 64) | data_[1];
+            q = num / div;
+            quotient.data_[1] = static_cast<limb_type>(q);
+            rem = num % div;
+            num = (rem << 64) | data_[0];
+            quotient.data_[0] = static_cast<limb_type>(num / div);
+            return static_cast<limb_type>(num % div);
+        }
         unsigned __int128 rem = 0;
         for (size_t i = limbs; i-- > 0;)
         {
