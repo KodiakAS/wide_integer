@@ -246,8 +246,7 @@ public:
     using limb_type = uint64_t;
     template <size_t>
     friend struct detail::limbs_equal;
-    template <size_t, typename>
-    friend class std::numeric_limits;
+    friend class std::numeric_limits<integer<Bits, Signed>>;
 
     constexpr integer() noexcept = default;
 
