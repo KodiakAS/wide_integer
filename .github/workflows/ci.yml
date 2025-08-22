@@ -20,7 +20,7 @@ jobs:
             sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
             brew update
-            brew install cmake clang-format fmt googletest benchmark lcov boost
+            brew install cmake clang-format fmt googletest google-benchmark lcov boost
           fi
       - name: Configure
         run: cmake -S . -B build -DENABLE_COVERAGE=ON
