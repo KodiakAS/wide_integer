@@ -760,3 +760,15 @@ TEST(WideIntegerDivision, NegativeOperands)
     check(-8, -2);
     check(-1, 2);
 }
+
+TEST(WideInteger256, Division)
+{
+    using W = wide::integer<256, unsigned>;
+    W a = (W{1} << 200) + 123456789ULL;
+    uint64_t div = 987654321ULL;
+    W q = a / div;
+    W r = a % div;
+    EXPECT_EQ(q * div + r, a);
+    EXPECT_EQ(wide::to_string(q), "1627024769791889844363837995440879160110719541703693");
+    EXPECT_EQ(static_cast<uint64_t>(r), 865650712ULL);
+}
