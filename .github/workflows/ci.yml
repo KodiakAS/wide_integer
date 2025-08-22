@@ -63,7 +63,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential libfmt-dev
+          sudo apt-get install -y cmake build-essential libfmt-dev \
             libbenchmark-dev libboost-dev
       - name: Configure
         run: cmake -S . -B build -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON
@@ -73,8 +73,8 @@ jobs:
         run: |
           build/perf_cxx17 --benchmark_min_time=0.01s
           build/perf_cxx11 --benchmark_min_time=0.01s
-          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
-            --benchmark_out=perf_compare_int256_cxx11.json
+          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s \
+            --benchmark_out=perf_compare_int256_cxx11.json \
             --benchmark_out_format=json
       - name: Summarize perf_compare_int256_cxx11
         run: |
