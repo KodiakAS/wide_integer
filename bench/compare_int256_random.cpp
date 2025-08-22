@@ -1,6 +1,6 @@
 #include <chrono>
 #include <random>
-#include <string_view>
+#include <string>
 #include <vector>
 
 #include <benchmark/benchmark.h>
@@ -25,8 +25,10 @@ static long long measure(const std::vector<std::pair<Int, Int>> & data, Op op)
 {
     Int c{};
     auto start = std::chrono::steady_clock::now();
-    for (const auto & [a, b] : data)
+    for (const auto & item : data)
     {
+        Int a = item.first;
+        Int b = item.second;
         benchmark::DoNotOptimize(a);
         benchmark::DoNotOptimize(b);
         c = op(a, b);
@@ -204,10 +206,10 @@ int main(int argc, char ** argv)
 {
     for (int i = 1; i < argc; ++i)
     {
-        std::string_view arg(argv[i]);
-        if (arg.rfind("--seed=", 0) == 0)
+        std::string arg(argv[i]);
+        if (arg.find("--seed=") == 0)
         {
-            g_seed = static_cast<uint64_t>(std::stoull(std::string(arg.substr(7))));
+            g_seed = static_cast<uint64_t>(std::stoull(arg.substr(7)));
             for (int j = i; j < argc - 1; ++j)
                 argv[j] = argv[j + 1];
             --argc;
