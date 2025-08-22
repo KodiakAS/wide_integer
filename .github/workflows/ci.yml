@@ -23,7 +23,7 @@ jobs:
             brew install cmake clang-format fmt googletest google-benchmark lcov boost
           fi
       - name: Configure
-        run: cmake -S . -B build -DENABLE_COVERAGE=ON
+        run: cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
       - name: Build
         run: cmake --build build --config Debug
       - name: Run tests
@@ -43,3 +43,23 @@ jobs:
             git diff --exit-code
           fi
 
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libfmt-dev libbenchmark-dev lcov libboost-dev
+      - name: Configure
+        run: cmake -S . -B build -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Run benchmarks
+        run: |
+          build/perf_cxx17 --benchmark_min_time=0.01s
+          build/perf_cxx11 --benchmark_min_time=0.01s
+          build/perf_compare_int128 --benchmark_min_time=0.01s
+          build/perf_compare_int128_cxx11 --benchmark_min_time=0.01s
+          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+          build/perf_compare_int256_random_cxx11 --benchmark_min_time=0.01s
