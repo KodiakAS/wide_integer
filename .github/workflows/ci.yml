@@ -1,4 +1,5 @@
 ---
+# yamllint disable rule:line-length
 name: CI
 
 'on':
@@ -79,7 +80,7 @@ jobs:
       - name: Summarize perf_compare_int256_cxx11
         run: |
           python - <<'PYTHON'
-          import json
+          import json, os
 
           data = json.load(
               open('perf_compare_int256_cxx11.json', 'r', encoding='utf-8')
@@ -95,30 +96,7 @@ jobs:
                   f"{b.get('real_time', 0.0):.2f} |"
               )
           with open(
-              'perf_compare_int256_cxx11.md', 'w', encoding='utf-8'
+              os.environ["GITHUB_STEP_SUMMARY"], 'a', encoding='utf-8'
           ) as out:
               out.write("\n".join(lines) + "\n")
           PYTHON
-      - name: Find pull request
-        id: find_pr
-        uses: peter-evans/find-pull-request@v3
-        with:
-          commit: ${{ github.sha }}
-      - name: Comment benchmark result
-        if: steps.find_pr.outputs.pr-number != ''
-        uses: actions/github-script@v7
-        env:
-          PR_NUMBER: ${{ steps.find_pr.outputs.pr-number }}
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const body = fs.readFileSync(
-              'perf_compare_int256_cxx11.md',
-              'utf8'
-            );
-            await github.rest.issues.createComment({
-              ...context.repo,
-              issue_number: process.env.PR_NUMBER,
-              body: `### perf_compare_int256_cxx11\n${body}`,
-            });
