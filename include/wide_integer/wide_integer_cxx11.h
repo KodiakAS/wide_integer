@@ -134,6 +134,108 @@ inline void sub_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
     unsigned __int128 rhs3 = static_cast<unsigned __int128>(rhs[3]) + borrow;
     lhs[3] = static_cast<uint64_t>(lhs3 - rhs3);
 }
+
+inline void mul_128(uint64_t * res, const uint64_t * a, const uint64_t * b) noexcept
+{
+    unsigned __int128 a_lo = a[0];
+    unsigned __int128 a_hi = a[1];
+    unsigned __int128 b_lo = b[0];
+    unsigned __int128 b_hi = b[1];
+
+    unsigned __int128 lo = a_lo * b_lo;
+    unsigned __int128 mid = a_lo * b_hi + a_hi * b_lo + (lo >> 64);
+    unsigned __int128 hi = a_hi * b_hi + (mid >> 64);
+
+    res[0] = static_cast<uint64_t>(lo);
+    res[1] = static_cast<uint64_t>(mid);
+    res[2] = static_cast<uint64_t>(hi);
+    res[3] = static_cast<uint64_t>(hi >> 64);
+}
+
+template <size_t L>
+inline void mul_limbs(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 carry = 0;
+        for (size_t j = 0; j + i < L; ++j)
+        {
+            unsigned __int128 cur = static_cast<unsigned __int128>(res[i + j]) + static_cast<unsigned __int128>(lhs[i]) * rhs[j] + carry;
+            res[i + j] = static_cast<uint64_t>(cur);
+            carry = cur >> 64;
+        }
+    }
+}
+
+template <>
+inline void mul_limbs<4>(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    if ((lhs[2] | lhs[3] | rhs[2] | rhs[3]) == 0)
+    {
+        mul_128(res, lhs, rhs);
+        return;
+    }
+
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half b01 = (Half(rhs[1]) << 64) | rhs[0];
+    Half b23 = (Half(rhs[3]) << 64) | rhs[2];
+
+    Half r23 = a23 * b01 + a01 * b23 + Half(lhs[1]) * rhs[1];
+    Half r01 = Half(lhs[0]) * rhs[0];
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs[0];
+
+    res[0] = static_cast<uint64_t>(r01);
+    res[3] = static_cast<uint64_t>(r23 >> 64);
+
+    Half cross2 = Half(lhs[0]) * rhs[1];
+    cross += cross2;
+    if (cross < cross2)
+        ++res[3];
+
+    r12 += cross;
+    if (r12 < cross)
+        ++res[3];
+
+    res[1] = static_cast<uint64_t>(r12);
+    res[2] = static_cast<uint64_t>(r12 >> 64);
+}
+
+template <size_t L>
+inline void mul_limb(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 cur = static_cast<unsigned __int128>(lhs[i]) * rhs + carry;
+        lhs[i] = static_cast<uint64_t>(cur);
+        carry = cur >> 64;
+    }
+}
+
+template <>
+inline void mul_limb<4>(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half r23 = a23 * rhs;
+    Half r01 = Half(lhs[0]) * rhs;
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs;
+
+    lhs[0] = static_cast<uint64_t>(r01);
+    lhs[3] = static_cast<uint64_t>(r23 >> 64);
+
+    r12 += cross;
+    if (r12 < cross)
+        ++lhs[3];
+
+    lhs[1] = static_cast<uint64_t>(r12);
+    lhs[2] = static_cast<uint64_t>(r12 >> 64);
+}
 } // namespace detail
 
 template <size_t Bits, typename Signed>
@@ -547,102 +649,14 @@ public:
 
     friend integer operator*(const integer & lhs, const integer & rhs) noexcept
     {
-        if (limbs == 4 && sizeof(limb_type) == 8 && lhs.data_[3] == 0 && lhs.data_[2] == 0 && rhs.data_[3] == 0 && rhs.data_[2] == 0)
-        {
-            unsigned __int128 a_lo = lhs.data_[0];
-            unsigned __int128 a_hi = lhs.data_[1];
-            unsigned __int128 b_lo = rhs.data_[0];
-            unsigned __int128 b_hi = rhs.data_[1];
-
-            unsigned __int128 lo = a_lo * b_lo;
-            unsigned __int128 mid = a_lo * b_hi + a_hi * b_lo + (lo >> 64);
-            unsigned __int128 hi = a_hi * b_hi + (mid >> 64);
-
-            integer result;
-            result.data_[0] = static_cast<limb_type>(lo);
-            result.data_[1] = static_cast<limb_type>(mid);
-            result.data_[2] = static_cast<limb_type>(hi);
-            result.data_[3] = static_cast<limb_type>(hi >> 64);
-            return result;
-        }
-        if (limbs == 4 && sizeof(limb_type) == 8)
-        {
-            using HalfType = unsigned __int128;
-            HalfType a01 = (HalfType(lhs.data_[1]) << 64) + lhs.data_[0];
-            HalfType a23 = (HalfType(lhs.data_[3]) << 64) + lhs.data_[2];
-            HalfType b01 = (HalfType(rhs.data_[1]) << 64) + rhs.data_[0];
-            HalfType b23 = (HalfType(rhs.data_[3]) << 64) + rhs.data_[2];
-
-            HalfType r23 = a23 * b01 + a01 * b23 + HalfType(lhs.data_[1]) * rhs.data_[1];
-            HalfType r01 = HalfType(lhs.data_[0]) * rhs.data_[0];
-            HalfType r12 = (r01 >> 64) + (r23 << 64);
-            HalfType r12_x = HalfType(lhs.data_[1]) * rhs.data_[0];
-
-            integer result;
-            result.data_[0] = static_cast<limb_type>(r01);
-            result.data_[3] = static_cast<limb_type>(r23 >> 64);
-
-            HalfType r12_y = HalfType(lhs.data_[0]) * rhs.data_[1];
-            r12_x += r12_y;
-            if (r12_x < r12_y)
-                ++result.data_[3];
-
-            r12 += r12_x;
-            if (r12 < r12_x)
-                ++result.data_[3];
-
-            result.data_[1] = static_cast<limb_type>(r12);
-            result.data_[2] = static_cast<limb_type>(r12 >> 64);
-            return result;
-        }
-
-        integer result;
-        for (size_t i = 0; i < limbs; ++i)
-        {
-            unsigned __int128 carry = 0;
-            for (size_t j = 0; j + i < limbs; ++j)
-            {
-                unsigned __int128 cur = result.data_[i + j];
-                cur += static_cast<unsigned __int128>(lhs.data_[i]) * rhs.data_[j];
-                cur += carry;
-                result.data_[i + j] = static_cast<limb_type>(cur);
-                carry = cur >> 64;
-            }
-        }
+        integer result{};
+        detail::mul_limbs<limbs>(result.data_, lhs.data_, rhs.data_);
         return result;
     }
 
     friend integer operator*(integer lhs, limb_type rhs) noexcept
     {
-        if (limbs == 4)
-        {
-            using HalfType = unsigned __int128;
-            HalfType a01 = (HalfType(lhs.data_[1]) << 64) + lhs.data_[0];
-            HalfType a23 = (HalfType(lhs.data_[3]) << 64) + lhs.data_[2];
-            HalfType r23 = a23 * rhs;
-            HalfType r01 = HalfType(lhs.data_[0]) * rhs;
-            HalfType r12 = (r01 >> 64) + (r23 << 64);
-            HalfType r12_x = HalfType(lhs.data_[1]) * rhs;
-
-            integer result;
-            result.data_[0] = static_cast<limb_type>(r01);
-            result.data_[3] = static_cast<limb_type>(r23 >> 64);
-
-            r12 += r12_x;
-            if (r12 < r12_x)
-                ++result.data_[3];
-
-            result.data_[1] = static_cast<limb_type>(r12);
-            result.data_[2] = static_cast<limb_type>(r12 >> 64);
-            return result;
-        }
-        unsigned __int128 carry = 0;
-        for (size_t i = 0; i < limbs; ++i)
-        {
-            unsigned __int128 cur = static_cast<unsigned __int128>(lhs.data_[i]) * rhs + carry;
-            lhs.data_[i] = static_cast<limb_type>(cur);
-            carry = cur >> 64;
-        }
+        detail::mul_limb<limbs>(lhs.data_, rhs);
         return lhs;
     }
 
