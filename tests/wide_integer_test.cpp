@@ -43,6 +43,19 @@ TEST(WideIntegerConstexpr, Construction)
     (void)d;
 }
 
+TEST(WideIntegerOps, SmallMulDiv)
+{
+    using UInt256 = wide::integer<256, unsigned>;
+    UInt256 a = (UInt256(1) << 128) + 5;
+    UInt256 b = a * 3ULL;
+    EXPECT_EQ(b / 3ULL, a);
+    EXPECT_EQ(b % 3ULL, UInt256(0));
+
+    UInt256 c = UInt256(123456789);
+    EXPECT_EQ(c * 7ULL, UInt256(864197523));
+    EXPECT_EQ((c * 7ULL) / 7ULL, c);
+}
+
 enum class ArithOp
 {
     Add,

@@ -82,29 +82,29 @@ Sample output:
 ----------------------------------------------------------
 Benchmark                Time             CPU   Iterations
 ----------------------------------------------------------
-Add/Small/Wide        1.88 ns         1.88 ns    361414688
-Add/Small/Boost       2.35 ns         2.35 ns    304911624
-Add/Large/Wide        1.97 ns         1.97 ns    325738792
-Add/Large/Boost       5.05 ns         5.05 ns    100000000
-Add/Mixed/Wide        1.97 ns         1.97 ns    371788800
-Add/Mixed/Boost       6.12 ns         6.12 ns    115220534
-Sub/Small/Wide        3.05 ns         3.05 ns    237572461
-Sub/Small/Boost       2.88 ns         2.88 ns    244308597
-Sub/Large/Wide        2.95 ns         2.95 ns    228135444
-Sub/Large/Boost       7.16 ns         7.16 ns    110235512
-Sub/Mixed/Wide        3.03 ns         3.03 ns    235640889
-Sub/Mixed/Boost       5.55 ns         5.55 ns    138452880
-Mul/Small/Wide        5.04 ns         5.04 ns    116608440
-Mul/Small/Boost       2.18 ns         2.18 ns    328708300
-Mul/Large/Wide        5.31 ns         5.31 ns    132190620
-Mul/Large/Boost       14.4 ns         14.4 ns     50912489
-Mul/Mixed/Wide        5.26 ns         5.26 ns    134453355
-Mul/Mixed/Boost       15.1 ns         15.1 ns     43804318
-Div/Small/Wide        15.7 ns         15.7 ns     47161725
-Div/Small/Boost       10.2 ns         10.2 ns     70174722
-Div/Large/Wide         668 ns          668 ns      1120539
-Div/Large/Boost       58.2 ns         58.2 ns     12585309
-Div/Mixed/Wide         662 ns          662 ns      1089092
-Div/Mixed/Boost       63.5 ns         63.5 ns     11002059
+Add/Small/Wide        1.88 ns         1.88 ns      7301764
+Add/Small/Boost       2.30 ns         2.29 ns      6055725
+Add/Large/Wide        2.10 ns         2.10 ns      7171356
+Add/Large/Boost       6.84 ns         6.84 ns      2422954
+Add/Mixed/Wide        1.78 ns         1.78 ns      7806488
+Add/Mixed/Boost       5.76 ns         5.76 ns      2371206
+Sub/Small/Wide        2.81 ns         2.81 ns      5099976
+Sub/Small/Boost       2.89 ns         2.89 ns      4832640
+Sub/Large/Wide        2.81 ns         2.81 ns      4926732
+Sub/Large/Boost       6.57 ns         6.57 ns      2272943
+Sub/Mixed/Wide        2.74 ns         2.74 ns      5297833
+Sub/Mixed/Boost       4.99 ns         4.99 ns      2811051
+Mul/Small/Wide        3.32 ns         3.32 ns      4502986
+Mul/Small/Boost       2.77 ns         2.77 ns      5896269
+Mul/Large/Wide        6.14 ns         6.14 ns      2135381
+Mul/Large/Boost       12.9 ns         12.9 ns      1105486
+Mul/Mixed/Wide        5.77 ns         5.77 ns      2464757
+Mul/Mixed/Boost       14.8 ns         14.8 ns       946250
+Div/Small/Wide        5.48 ns         5.49 ns      2536622
+Div/Small/Boost       9.94 ns         9.94 ns      1329075
+Div/Large/Wide         704 ns          704 ns        19714
+Div/Large/Boost       54.8 ns         54.8 ns       245143
+Div/Mixed/Wide         726 ns          726 ns        19164
+Div/Mixed/Boost       60.4 ns         60.4 ns       236945
 ```
 
