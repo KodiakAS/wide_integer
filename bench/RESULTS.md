@@ -65,3 +65,46 @@ The looped benchmark makes timing differences more visible. `wide_integer` has
 slightly faster additions than the compiler builtin or Boost types, while its
 256‑bit multiplication remains faster than Boost's implementation.
 
+## C++11 `int256` vs Boost
+
+This benchmark compares the C++11 implementation of `wide::integer<256, signed>`
+against Boost's `int256_t` for a variety of operand sizes and signs.
+
+To run:
+```bash
+cmake -S . -B build
+cmake --build build --config Release -j$(nproc)
+./build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+```
+
+Sample output:
+```
+----------------------------------------------------------
+Benchmark                Time             CPU   Iterations
+----------------------------------------------------------
+Add/Small/Wide       0.594 ns        0.594 ns     23639169
+Add/Small/Boost       2.51 ns         2.51 ns      5522541
+Add/Large/Wide       0.587 ns        0.587 ns     23868318
+Add/Large/Boost       5.62 ns         5.62 ns      2542542
+Add/Mixed/Wide        1.18 ns         1.18 ns     11497321
+Add/Mixed/Boost       5.66 ns         5.66 ns      2500564
+Sub/Small/Wide       0.586 ns        0.586 ns     23669159
+Sub/Small/Boost       2.08 ns         2.08 ns      6677669
+Sub/Large/Wide       0.589 ns        0.589 ns     23724346
+Sub/Large/Boost       5.95 ns         5.95 ns      2312915
+Sub/Mixed/Wide       0.592 ns        0.592 ns     23616654
+Sub/Mixed/Boost       5.57 ns         5.57 ns      2502206
+Mul/Small/Wide       0.585 ns        0.585 ns     23964429
+Mul/Small/Boost       2.09 ns         2.09 ns      6831201
+Mul/Large/Wide       0.600 ns        0.600 ns     23625315
+Mul/Large/Boost       14.0 ns         14.0 ns       973061
+Mul/Mixed/Wide        2.01 ns         2.01 ns      6999199
+Mul/Mixed/Boost       15.1 ns         15.1 ns       967657
+Div/Small/Wide        14.6 ns         14.6 ns       957805
+Div/Small/Boost       10.1 ns         10.1 ns      1464733
+Div/Large/Wide         620 ns          620 ns        22840
+Div/Large/Boost       56.6 ns         56.6 ns       247870
+Div/Mixed/Wide         634 ns          634 ns        22996
+Div/Mixed/Boost       62.3 ns         62.4 ns       230513
+```
+
