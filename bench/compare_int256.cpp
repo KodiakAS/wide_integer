@@ -17,6 +17,8 @@ static void AddSmall(benchmark::State & state)
     Int b = 987654321098765LL;
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a + b;
         benchmark::DoNotOptimize(c);
     }
@@ -29,6 +31,8 @@ static void AddLarge(benchmark::State & state)
     Int b = (Int{1} << 200) + Int{123456789};
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a + b;
         benchmark::DoNotOptimize(c);
     }
@@ -41,6 +45,8 @@ static void AddMixed(benchmark::State & state)
     Int b = -((Int{1} << 199) + Int{1});
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a + b;
         benchmark::DoNotOptimize(c);
     }
@@ -53,6 +59,8 @@ static void SubSmall(benchmark::State & state)
     Int b = 1234567890123456LL;
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a - b;
         benchmark::DoNotOptimize(c);
     }
@@ -65,6 +73,8 @@ static void SubLarge(benchmark::State & state)
     Int b = (Int{1} << 200) + Int{12345};
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a - b;
         benchmark::DoNotOptimize(c);
     }
@@ -77,6 +87,8 @@ static void SubMixed(benchmark::State & state)
     Int b = (Int{1} << 199);
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a - b;
         benchmark::DoNotOptimize(c);
     }
@@ -89,6 +101,8 @@ static void MulSmall(benchmark::State & state)
     Int b = 987654321;
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a * b;
         benchmark::DoNotOptimize(c);
     }
@@ -101,6 +115,8 @@ static void MulLarge(benchmark::State & state)
     Int b = (Int{1} << 120) + Int{6789};
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a * b;
         benchmark::DoNotOptimize(c);
     }
@@ -113,6 +129,8 @@ static void MulMixed(benchmark::State & state)
     Int b = (Int{1} << 120);
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a * b;
         benchmark::DoNotOptimize(c);
     }
@@ -125,6 +143,8 @@ static void DivSmall(benchmark::State & state)
     Int b = 123456789LL;
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a / b;
         benchmark::DoNotOptimize(c);
     }
@@ -137,6 +157,8 @@ static void DivLarge(benchmark::State & state)
     Int b = (Int{1} << 128) + Int{12345};
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a / b;
         benchmark::DoNotOptimize(c);
     }
@@ -149,6 +171,8 @@ static void DivMixed(benchmark::State & state)
     Int b = (Int{1} << 128);
     for (auto _ : state)
     {
+        benchmark::DoNotOptimize(a);
+        benchmark::DoNotOptimize(b);
         auto c = a / b;
         benchmark::DoNotOptimize(c);
     }
