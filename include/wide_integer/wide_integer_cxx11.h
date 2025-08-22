@@ -1,7 +1,10 @@
 #pragma once
 
+#include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <ostream>
 #include <string>
 #include <type_traits>
@@ -69,56 +72,171 @@ struct limbs_equal<0>
     }
 };
 
-template <size_t I>
-struct add_limbs
+template <size_t L>
+inline void add_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
 {
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
     {
-        add_limbs<I - 1>::eval(lhs, rhs, carry);
-        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[I]) + rhs.data_[I] + carry;
-        lhs.data_[I] = static_cast<typename Int::limb_type>(sum);
+        unsigned __int128 sum = static_cast<unsigned __int128>(lhs[i]) + rhs[i] + carry;
+        lhs[i] = static_cast<uint64_t>(sum);
         carry = sum >> 64;
     }
-};
-
-template <>
-struct add_limbs<0>
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
-    {
-        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[0]) + rhs.data_[0] + carry;
-        lhs.data_[0] = static_cast<typename Int::limb_type>(sum);
-        carry = sum >> 64;
-    }
-};
-
-template <size_t I>
-struct sub_limbs
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
-    {
-        sub_limbs<I - 1>::eval(lhs, rhs, borrow);
-        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[I]) - rhs.data_[I] - borrow;
-        lhs.data_[I] = static_cast<typename Int::limb_type>(diff);
-        borrow = (diff >> 127) & 1;
-    }
-};
-
-template <>
-struct sub_limbs<0>
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
-    {
-        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[0]) - rhs.data_[0] - borrow;
-        lhs.data_[0] = static_cast<typename Int::limb_type>(diff);
-        borrow = (diff >> 127) & 1;
-    }
-};
 }
+
+template <>
+inline void add_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 sum;
+    sum = static_cast<unsigned __int128>(lhs[0]) + rhs[0];
+    lhs[0] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[1]) + rhs[1] + (sum >> 64);
+    lhs[1] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[2]) + rhs[2] + (sum >> 64);
+    lhs[2] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[3]) + rhs[3] + (sum >> 64);
+    lhs[3] = static_cast<uint64_t>(sum);
+}
+
+template <size_t L>
+inline void sub_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 borrow = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 lhs_i = lhs[i];
+        unsigned __int128 subtrahend = static_cast<unsigned __int128>(rhs[i]) + borrow;
+        lhs[i] = static_cast<uint64_t>(lhs_i - subtrahend);
+        borrow = lhs_i < subtrahend;
+    }
+}
+
+template <>
+inline void sub_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 borrow = 0;
+    unsigned __int128 lhs0 = lhs[0];
+    unsigned __int128 rhs0 = rhs[0];
+    lhs[0] = static_cast<uint64_t>(lhs0 - rhs0);
+    borrow = lhs0 < rhs0;
+
+    unsigned __int128 lhs1 = lhs[1];
+    unsigned __int128 rhs1 = static_cast<unsigned __int128>(rhs[1]) + borrow;
+    lhs[1] = static_cast<uint64_t>(lhs1 - rhs1);
+    borrow = lhs1 < rhs1;
+
+    unsigned __int128 lhs2 = lhs[2];
+    unsigned __int128 rhs2 = static_cast<unsigned __int128>(rhs[2]) + borrow;
+    lhs[2] = static_cast<uint64_t>(lhs2 - rhs2);
+    borrow = lhs2 < rhs2;
+
+    unsigned __int128 lhs3 = lhs[3];
+    unsigned __int128 rhs3 = static_cast<unsigned __int128>(rhs[3]) + borrow;
+    lhs[3] = static_cast<uint64_t>(lhs3 - rhs3);
+}
+
+inline void mul_128(uint64_t * res, const uint64_t * a, const uint64_t * b) noexcept
+{
+    unsigned __int128 a_lo = a[0];
+    unsigned __int128 a_hi = a[1];
+    unsigned __int128 b_lo = b[0];
+    unsigned __int128 b_hi = b[1];
+
+    unsigned __int128 lo = a_lo * b_lo;
+    unsigned __int128 mid = a_lo * b_hi + a_hi * b_lo + (lo >> 64);
+    unsigned __int128 hi = a_hi * b_hi + (mid >> 64);
+
+    res[0] = static_cast<uint64_t>(lo);
+    res[1] = static_cast<uint64_t>(mid);
+    res[2] = static_cast<uint64_t>(hi);
+    res[3] = static_cast<uint64_t>(hi >> 64);
+}
+
+template <size_t L>
+inline void mul_limbs(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 carry = 0;
+        for (size_t j = 0; j + i < L; ++j)
+        {
+            unsigned __int128 cur = static_cast<unsigned __int128>(res[i + j]) + static_cast<unsigned __int128>(lhs[i]) * rhs[j] + carry;
+            res[i + j] = static_cast<uint64_t>(cur);
+            carry = cur >> 64;
+        }
+    }
+}
+
+template <>
+inline void mul_limbs<4>(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    if ((lhs[2] | lhs[3] | rhs[2] | rhs[3]) == 0)
+    {
+        mul_128(res, lhs, rhs);
+        return;
+    }
+
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half b01 = (Half(rhs[1]) << 64) | rhs[0];
+    Half b23 = (Half(rhs[3]) << 64) | rhs[2];
+
+    Half r23 = a23 * b01 + a01 * b23 + Half(lhs[1]) * rhs[1];
+    Half r01 = Half(lhs[0]) * rhs[0];
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs[0];
+
+    res[0] = static_cast<uint64_t>(r01);
+    res[3] = static_cast<uint64_t>(r23 >> 64);
+
+    Half cross2 = Half(lhs[0]) * rhs[1];
+    cross += cross2;
+    if (cross < cross2)
+        ++res[3];
+
+    r12 += cross;
+    if (r12 < cross)
+        ++res[3];
+
+    res[1] = static_cast<uint64_t>(r12);
+    res[2] = static_cast<uint64_t>(r12 >> 64);
+}
+
+template <size_t L>
+inline void mul_limb(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 cur = static_cast<unsigned __int128>(lhs[i]) * rhs + carry;
+        lhs[i] = static_cast<uint64_t>(cur);
+        carry = cur >> 64;
+    }
+}
+
+template <>
+inline void mul_limb<4>(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half r23 = a23 * rhs;
+    Half r01 = Half(lhs[0]) * rhs;
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs;
+
+    lhs[0] = static_cast<uint64_t>(r01);
+    lhs[3] = static_cast<uint64_t>(r23 >> 64);
+
+    r12 += cross;
+    if (r12 < cross)
+        ++lhs[3];
+
+    lhs[1] = static_cast<uint64_t>(r12);
+    lhs[2] = static_cast<uint64_t>(r12 >> 64);
+}
+} // namespace detail
 
 template <size_t Bits, typename Signed>
 class integer
@@ -128,15 +246,23 @@ public:
     using limb_type = uint64_t;
     template <size_t>
     friend struct detail::limbs_equal;
-    template <size_t>
-    friend struct detail::add_limbs;
-    template <size_t>
-    friend struct detail::sub_limbs;
+    template <size_t, typename>
+    friend class std::numeric_limits;
 
     constexpr integer() noexcept = default;
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     constexpr integer(T v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
+
+    constexpr integer(__int128 v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
+
+    constexpr integer(unsigned __int128 v) noexcept
         : integer(v, typename detail::make_index_sequence<limbs>::type())
     {
     }
@@ -170,6 +296,18 @@ public:
         return *this;
     }
 
+    integer & operator=(__int128 v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    integer & operator=(unsigned __int128 v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     integer & operator=(T v) noexcept
     {
@@ -188,6 +326,22 @@ public:
             return static_cast<T>(static_cast<__int128>(value));
         else
             return static_cast<T>(value);
+    }
+
+    operator __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(__int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return static_cast<__int128>(value);
+    }
+
+    operator unsigned __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(unsigned __int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return value;
     }
 
     explicit operator long double() const noexcept
@@ -211,15 +365,13 @@ public:
 
     integer & operator+=(const integer & rhs) noexcept
     {
-        unsigned __int128 carry = 0;
-        detail::add_limbs<limbs - 1>::eval(*this, rhs, carry);
+        detail::add_limbs<limbs>(data_, rhs.data_);
         return *this;
     }
 
     integer & operator-=(const integer & rhs) noexcept
     {
-        unsigned __int128 borrow = 0;
-        detail::sub_limbs<limbs - 1>::eval(*this, rhs, borrow);
+        detail::sub_limbs<limbs>(data_, rhs.data_);
         return *this;
     }
 
@@ -375,15 +527,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator+(integer lhs, T rhs) noexcept
     {
-        lhs += integer(rhs);
-        return lhs;
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator+(T lhs, integer rhs) noexcept
     {
-        rhs += integer(lhs);
-        return rhs;
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator-(integer lhs, const integer & rhs) noexcept
@@ -408,14 +562,17 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator-(integer lhs, T rhs) noexcept
     {
-        lhs -= integer(rhs);
-        return lhs;
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator-(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) - rhs;
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator&(integer lhs, const integer & rhs) noexcept
@@ -492,54 +649,18 @@ public:
 
     friend integer operator*(const integer & lhs, const integer & rhs) noexcept
     {
-        if (limbs == 4 && sizeof(limb_type) == 8)
-        {
-            using HalfType = unsigned __int128;
-            HalfType a01 = (HalfType(lhs.data_[1]) << 64) + lhs.data_[0];
-            HalfType a23 = (HalfType(lhs.data_[3]) << 64) + lhs.data_[2];
-            HalfType b01 = (HalfType(rhs.data_[1]) << 64) + rhs.data_[0];
-            HalfType b23 = (HalfType(rhs.data_[3]) << 64) + rhs.data_[2];
-
-            HalfType r23 = a23 * b01 + a01 * b23 + HalfType(lhs.data_[1]) * rhs.data_[1];
-            HalfType r01 = HalfType(lhs.data_[0]) * rhs.data_[0];
-            HalfType r12 = (r01 >> 64) + (r23 << 64);
-            HalfType r12_x = HalfType(lhs.data_[1]) * rhs.data_[0];
-
-            integer result;
-            result.data_[0] = static_cast<limb_type>(r01);
-            result.data_[3] = static_cast<limb_type>(r23 >> 64);
-
-            HalfType r12_y = HalfType(lhs.data_[0]) * rhs.data_[1];
-            r12_x += r12_y;
-            if (r12_x < r12_y)
-                ++result.data_[3];
-
-            r12 += r12_x;
-            if (r12 < r12_x)
-                ++result.data_[3];
-
-            result.data_[1] = static_cast<limb_type>(r12);
-            result.data_[2] = static_cast<limb_type>(r12 >> 64);
-            return result;
-        }
-        else
-        {
-            integer result;
-            for (size_t i = 0; i < limbs; ++i)
-            {
-                unsigned __int128 carry = 0;
-                for (size_t j = 0; j + i < limbs; ++j)
-                {
-                    unsigned __int128 cur = result.data_[i + j];
-                    cur += static_cast<unsigned __int128>(lhs.data_[i]) * rhs.data_[j];
-                    cur += carry;
-                    result.data_[i + j] = static_cast<limb_type>(cur);
-                    carry = cur >> 64;
-                }
-            }
-            return result;
-        }
+        integer result{};
+        detail::mul_limbs<limbs>(result.data_, lhs.data_, rhs.data_);
+        return result;
     }
+
+    friend integer operator*(integer lhs, limb_type rhs) noexcept
+    {
+        detail::mul_limb<limbs>(lhs.data_, rhs);
+        return lhs;
+    }
+
+    friend integer operator*(limb_type lhs, integer rhs) noexcept { return rhs * lhs; }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     friend integer operator*(integer lhs, T rhs) noexcept
@@ -556,37 +677,133 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator*(integer lhs, T rhs) noexcept
     {
-        return lhs * integer(rhs);
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator*(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) * rhs;
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     friend integer operator/(integer lhs, const integer & rhs) noexcept
     {
-        integer result;
+        bool lhs_neg = false;
+        bool rhs_neg = false;
         integer divisor = rhs;
-        integer current(1);
-        while (divisor <= lhs && !(divisor.data_[limbs - 1] & (1ULL << 63)))
+        if (std::is_same<Signed, signed>::value)
         {
-            divisor <<= 1;
-            current <<= 1;
+            lhs_neg = lhs.data_[limbs - 1] >> 63;
+            rhs_neg = divisor.data_[limbs - 1] >> 63;
+            if (lhs_neg)
+                lhs = -lhs;
+            if (rhs_neg)
+                divisor = -divisor;
         }
-        while (!current.is_zero())
+        integer result;
+        size_t divisor_limbs = limbs;
+        while (divisor_limbs > 0 && divisor.data_[divisor_limbs - 1] == 0)
+            --divisor_limbs;
+        bool small_divisor = divisor_limbs == 1;
+        if (small_divisor)
         {
-            if (!(lhs < divisor))
+            lhs.div_mod_small(divisor.data_[0], result);
+        }
+        else
+        {
+            int pow_bit;
+            if (is_power_of_two(divisor, pow_bit))
             {
-                lhs -= divisor;
-                result |= current;
+                result = lhs >> pow_bit;
             }
-            divisor >>= 1;
-            current >>= 1;
+            else if (limbs == 2)
+            {
+                unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                unsigned __int128 q = a / b;
+                result.data_[0] = static_cast<limb_type>(q);
+                result.data_[1] = static_cast<limb_type>(q >> 64);
+            }
+            else if (divisor_limbs <= 2)
+            {
+                size_t lhs_limbs = limbs;
+                while (lhs_limbs > 0 && lhs.data_[lhs_limbs - 1] == 0)
+                    --lhs_limbs;
+                if (lhs_limbs <= 2)
+                {
+                    unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                    unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                    unsigned __int128 q = a / b;
+                    result.data_[0] = static_cast<limb_type>(q);
+                    result.data_[1] = static_cast<limb_type>(q >> 64);
+                }
+                else if (limbs <= 4)
+                {
+                    result = div_large(lhs, divisor, divisor_limbs);
+                }
+                else
+                {
+                    int shift = lhs.highest_bit() - divisor.highest_bit();
+                    integer current(1);
+                    if (shift > 0)
+                    {
+                        divisor <<= shift;
+                        current <<= shift;
+                    }
+                    for (; shift >= 0; --shift)
+                    {
+                        if (!(lhs < divisor))
+                        {
+                            lhs -= divisor;
+                            result |= current;
+                        }
+                        divisor >>= 1;
+                        current >>= 1;
+                    }
+                }
+            }
+            else if (limbs <= 4)
+            {
+                result = div_large(lhs, divisor, divisor_limbs);
+            }
+            else
+            {
+                int shift = lhs.highest_bit() - divisor.highest_bit();
+                integer current(1);
+                if (shift > 0)
+                {
+                    divisor <<= shift;
+                    current <<= shift;
+                }
+                for (; shift >= 0; --shift)
+                {
+                    if (!(lhs < divisor))
+                    {
+                        lhs -= divisor;
+                        result |= current;
+                    }
+                    divisor >>= 1;
+                    current >>= 1;
+                }
+            }
         }
+        if (std::is_same<Signed, signed>::value && lhs_neg != rhs_neg)
+            result = -result;
         return result;
     }
+
+    friend integer operator/(integer lhs, limb_type rhs) noexcept
+    {
+        integer q;
+        lhs.div_mod_small(rhs, q);
+        return q;
+    }
+
+    friend integer operator/(limb_type lhs, integer rhs) noexcept { return integer(lhs) / rhs; }
 
     friend integer operator%(integer lhs, const integer & rhs) noexcept
     {
@@ -596,9 +813,20 @@ public:
         return lhs;
     }
 
+    friend integer operator%(integer lhs, limb_type rhs) noexcept
+    {
+        integer q;
+        limb_type r = lhs.div_mod_small(rhs, q);
+        return integer(r);
+    }
+
+    friend integer operator%(limb_type lhs, integer rhs) noexcept { return integer(lhs) % rhs; }
+
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     friend integer operator/(integer lhs, T rhs) noexcept
     {
+        if (sizeof(T) <= sizeof(limb_type))
+            return lhs / static_cast<limb_type>(rhs);
         return lhs / integer(rhs);
     }
 
@@ -611,18 +839,28 @@ public:
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator/(integer lhs, T rhs) noexcept
     {
-        return lhs / integer(rhs);
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
     friend integer operator/(T lhs, integer rhs) noexcept
     {
-        return integer(lhs) / rhs;
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
     }
 
     template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
     friend integer operator%(integer lhs, T rhs) noexcept
     {
+        if (sizeof(T) <= sizeof(limb_type))
+        {
+            integer q;
+            limb_type r = lhs.div_mod_small(static_cast<limb_type>(rhs), q);
+            return integer(r);
+        }
         return lhs % integer(rhs);
     }
 
@@ -898,11 +1136,39 @@ private:
         return true;
     }
 
+    int highest_bit() const noexcept
+    {
+        for (int i = static_cast<int>(limbs) - 1; i >= 0; --i)
+        {
+            if (data_[i])
+                return i * 64 + 63 - __builtin_clzll(data_[i]);
+        }
+        return -1;
+    }
+
     limb_type div_mod_small(limb_type div, integer & quotient) const noexcept
     {
         quotient = integer();
+        size_t n = limbs;
+        while (n > 0 && data_[n - 1] == 0)
+            --n;
+        if (n == 0)
+            return 0;
+        if (n == 1)
+        {
+            quotient.data_[0] = static_cast<limb_type>(data_[0] / div);
+            return static_cast<limb_type>(data_[0] % div);
+        }
+        if (n == 2)
+        {
+            unsigned __int128 num = (static_cast<unsigned __int128>(data_[1]) << 64) | data_[0];
+            unsigned __int128 q = num / div;
+            quotient.data_[0] = static_cast<limb_type>(q);
+            quotient.data_[1] = static_cast<limb_type>(q >> 64);
+            return static_cast<limb_type>(num % div);
+        }
         unsigned __int128 rem = 0;
-        for (size_t i = limbs; i-- > 0;)
+        for (size_t i = n; i-- > 0;)
         {
             rem = (rem << 64) | data_[i];
             quotient.data_[i] = static_cast<limb_type>(rem / div);
@@ -911,8 +1177,178 @@ private:
         return static_cast<limb_type>(rem);
     }
 
+    static bool is_power_of_two(const integer & v, int & bit_index) noexcept
+    {
+        bit_index = -1;
+        bool found = false;
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            limb_type limb = v.data_[i];
+            if (limb)
+            {
+                if (limb & (limb - 1))
+                    return false;
+                if (found)
+                    return false;
+                bit_index = static_cast<int>(i * 64 + __builtin_ctzll(limb));
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    static integer div_large(integer lhs, const integer & divisor, size_t div_limbs) noexcept
+    {
+        integer quotient;
+        size_t n = limbs;
+        while (n > 0 && lhs.data_[n - 1] == 0)
+            --n;
+        if (n < div_limbs)
+            return quotient;
+
+        std::array<limb_type, limbs + 1> u = {};
+        std::array<limb_type, limbs> v = {};
+
+        int shift = __builtin_clzll(divisor.data_[div_limbs - 1]);
+        limb_type carry = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            limb_type cur = lhs.data_[i];
+            u[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+        u[n] = carry;
+
+        carry = 0;
+        for (size_t i = 0; i < div_limbs; ++i)
+        {
+            limb_type cur = divisor.data_[i];
+            v[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+
+        for (int j = static_cast<int>(n - div_limbs); j >= 0; --j)
+        {
+            unsigned __int128 numerator = (static_cast<unsigned __int128>(u[j + div_limbs]) << 64) | u[j + div_limbs - 1];
+            unsigned __int128 qhat = numerator / v[div_limbs - 1];
+            unsigned __int128 rhat = numerator % v[div_limbs - 1];
+
+            if (div_limbs > 1)
+            {
+                while (qhat == (static_cast<unsigned __int128>(1) << 64) || qhat * v[div_limbs - 2] > ((rhat << 64) | u[j + div_limbs - 2]))
+                {
+                    --qhat;
+                    rhat += v[div_limbs - 1];
+                    if (rhat >= (static_cast<unsigned __int128>(1) << 64))
+                        break;
+                }
+            }
+
+            unsigned __int128 borrow = 0;
+            for (size_t i = 0; i < div_limbs; ++i)
+            {
+                unsigned __int128 p = qhat * v[i] + borrow;
+                if (u[j + i] < static_cast<limb_type>(p))
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = (p >> 64) + 1;
+                }
+                else
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = p >> 64;
+                }
+            }
+            if (u[j + div_limbs] < static_cast<limb_type>(borrow))
+            {
+                unsigned __int128 carry2 = 0;
+                for (size_t i = 0; i < div_limbs; ++i)
+                {
+                    unsigned __int128 t2 = static_cast<unsigned __int128>(u[j + i]) + v[i] + carry2;
+                    u[j + i] = static_cast<limb_type>(t2);
+                    carry2 = t2 >> 64;
+                }
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) + carry2);
+                --qhat;
+            }
+            else
+            {
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) - borrow);
+            }
+            quotient.data_[j] = static_cast<limb_type>(qhat);
+        }
+        return quotient;
+    }
+
     limb_type data_[limbs] = {};
 };
+
+} // namespace wide
+
+namespace std
+{
+template <size_t Bits, typename Signed>
+class numeric_limits<wide::integer<Bits, Signed>>
+{
+public:
+    static const bool is_specialized = true;
+    static const bool is_signed = std::is_same<Signed, signed>::value;
+    static const bool is_integer = true;
+    static const bool is_exact = true;
+    static const bool has_infinity = false;
+    static const bool has_quiet_NaN = false;
+    static const bool has_signaling_NaN = true;
+    static const bool has_denorm_loss = false;
+    static const std::float_round_style round_style = std::round_toward_zero;
+    static const bool is_iec559 = false;
+    static const bool is_bounded = true;
+    static const bool is_modulo = true;
+    static const int digits = Bits - (is_signed ? 1 : 0);
+    static const int digits10 = digits * 30103 / 100000;
+    static const int max_digits10 = 0;
+    static const int radix = 2;
+    static const int min_exponent = 0;
+    static const int min_exponent10 = 0;
+    static const int max_exponent = 0;
+    static const int max_exponent10 = 0;
+    static const bool traps = true;
+    static const bool tinyness_before = false;
+
+    static wide::integer<Bits, Signed> min() noexcept
+    {
+        if (is_signed)
+        {
+            typedef wide::integer<Bits, Signed> T;
+            T res;
+            res.data_[T::limbs - 1] = static_cast<typename T::limb_type>(1ULL << 63);
+            return res;
+        }
+        return wide::integer<Bits, Signed>(0);
+    }
+
+    static wide::integer<Bits, Signed> max() noexcept
+    {
+        if (is_signed)
+            return ~min();
+        typedef wide::integer<Bits, Signed> T;
+        T res;
+        for (size_t i = 0; i < T::limbs; ++i)
+            res.data_[i] = std::numeric_limits<typename T::limb_type>::max();
+        return res;
+    }
+
+    static wide::integer<Bits, Signed> lowest() noexcept { return min(); }
+    static wide::integer<Bits, Signed> epsilon() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> round_error() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> infinity() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> quiet_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> signaling_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> denorm_min() noexcept { return wide::integer<Bits, Signed>(0); }
+};
+} // namespace std
+
+namespace wide
+{
 
 template <size_t Bits, typename Signed>
 inline std::string to_string(const integer<Bits, Signed> & v)

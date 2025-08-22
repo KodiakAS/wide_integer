@@ -14,54 +14,97 @@ cmake --build build --config Release -j$(nproc)
 Sample output on a 2.8 GHz CPU:
 ```
 Benchmark                            Time             CPU   Iterations
-BM_Wide128Addition                2040 ns         2038 ns       335721
-BM_Wide128Subtraction             2198 ns         2196 ns       319258
-BM_Builtin128Addition             2335 ns         2333 ns       302507
-BM_Builtin128Subtraction          2306 ns         2304 ns       302659
-BM_Wide128Multiplication           227 ns          227 ns      3106920
-BM_Wide128Division                 537 ns          536 ns      1305691
-BM_Builtin128Multiplication        232 ns          232 ns      3055719
-BM_Builtin128Division              539 ns          539 ns      1226872
-BM_Boost128Addition               2335 ns         2334 ns       302943
-BM_Boost128Subtraction            2324 ns         2323 ns       300175
-BM_Boost128Multiplication          232 ns          232 ns      3023021
-BM_Boost128Division                528 ns          528 ns      1000000
-BM_Wide256Addition                1848 ns         1847 ns       380149
-BM_Wide256Subtraction             1947 ns         1947 ns       344306
-BM_Boost256Addition               2074 ns         2072 ns       351470
-BM_Boost256Subtraction            4019 ns         4019 ns       165910
-BM_Wide256Multiplication           361 ns          361 ns      1944052
-BM_Wide256Division                4114 ns         4113 ns       136049
-BM_Boost256Multiplication          586 ns          586 ns      1202912
-BM_Boost256Division               1282 ns         1282 ns       500483
+BM_Wide128Addition                2119 ns         2119 ns       335094
+BM_Wide128Subtraction             2190 ns         2190 ns       322166
+BM_Builtin128Addition             2286 ns         2286 ns       307653
+BM_Builtin128Subtraction          2283 ns         2283 ns       306640
+BM_Wide128Multiplication           230 ns          230 ns      3061851
+BM_Wide128Division                 541 ns          541 ns      1286217
+BM_Builtin128Multiplication        226 ns          226 ns      3096622
+BM_Builtin128Division              560 ns          560 ns      1228240
+BM_Boost128Addition               2305 ns         2305 ns       305968
+BM_Boost128Subtraction            2302 ns         2302 ns       303559
+BM_Boost128Multiplication          223 ns          223 ns      3082484
+BM_Boost128Division                573 ns          573 ns      1222177
+BM_Wide256Addition                1807 ns         1807 ns       392372
+BM_Wide256Subtraction             1873 ns         1873 ns       375089
+BM_Boost256Addition               1925 ns         1925 ns       370704
+BM_Boost256Subtraction            3911 ns         3911 ns       185063
+BM_Wide256Multiplication           325 ns          325 ns      2160624
+BM_Wide256Division                1489 ns         1489 ns       474118
+BM_Boost256Multiplication          549 ns          549 ns      1300117
+BM_Boost256Division               1178 ns         1178 ns       598816
 ```
 
 Sample output for the C++11 implementation:
 ```
 Benchmark                            Time             CPU   Iterations
-BM_Wide128Addition                1965 ns         1965 ns       316455
-BM_Wide128Subtraction             2053 ns         2053 ns       345626
-BM_Builtin128Addition             2314 ns         2314 ns       292793
-BM_Builtin128Subtraction          2301 ns         2301 ns       303393
-BM_Wide128Multiplication           241 ns          241 ns      2907557
-BM_Wide128Division                 494 ns          494 ns      1290217
-BM_Builtin128Multiplication        233 ns          233 ns      3071131
-BM_Builtin128Division              568 ns          568 ns      1232465
-BM_Boost128Addition               2328 ns         2328 ns       300796
-BM_Boost128Subtraction            2326 ns         2326 ns       301175
-BM_Boost128Multiplication          232 ns          232 ns      3003255
-BM_Boost128Division                544 ns          544 ns      1285022
-BM_Wide256Addition                1993 ns         1993 ns       344203
-BM_Wide256Subtraction             2410 ns         2410 ns       319426
-BM_Boost256Addition               2059 ns         2058 ns       341676
-BM_Boost256Subtraction            4385 ns         4385 ns       163912
-BM_Wide256Multiplication           350 ns          350 ns      2004604
-BM_Wide256Division                4099 ns         4099 ns       162684
-BM_Boost256Multiplication          561 ns          561 ns      1309018
-BM_Boost256Division               1293 ns         1293 ns       561343
+BM_Wide128Addition                1837 ns         1837 ns       384807
+BM_Wide128Subtraction             4499 ns         4499 ns       151749
+BM_Builtin128Addition             2306 ns         2306 ns       300732
+BM_Builtin128Subtraction          2326 ns         2326 ns       302106
+BM_Wide128Multiplication           242 ns          242 ns      2955489
+BM_Wide128Division                 554 ns          554 ns      1262717
+BM_Builtin128Multiplication        229 ns          229 ns      3084519
+BM_Builtin128Division              571 ns          571 ns      1230586
+BM_Boost128Addition               2311 ns         2311 ns       301522
+BM_Boost128Subtraction            2311 ns         2311 ns       305205
+BM_Boost128Multiplication          227 ns          227 ns      3115710
+BM_Boost128Division                573 ns          573 ns      1227688
+BM_Wide256Addition                1902 ns         1902 ns       369321
+BM_Wide256Subtraction             2109 ns         2109 ns       333797
+BM_Boost256Addition               1948 ns         1948 ns       365818
+BM_Boost256Subtraction            4138 ns         4138 ns       165978
+BM_Wide256Multiplication           345 ns          345 ns      2039112
+BM_Wide256Division                1021 ns         1021 ns       673262
+BM_Boost256Multiplication          523 ns          523 ns      1348030
+BM_Boost256Division               1266 ns         1266 ns       588112
 ```
 
 The looped benchmark makes timing differences more visible. `wide_integer` has
 slightly faster additions than the compiler builtin or Boost types, while its
 256‑bit multiplication remains faster than Boost's implementation.
+
+## C++11 `int256` vs Boost
+
+This benchmark compares the C++11 implementation of `wide::integer<256, signed>`
+against Boost's `int256_t` for a variety of operand sizes and signs.
+
+To run:
+```bash
+cmake -S . -B build
+cmake --build build --config Release -j$(nproc)
+./build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+```
+
+Sample output:
+```
+----------------------------------------------------------
+Benchmark                Time             CPU   Iterations
+----------------------------------------------------------
+Add/Small/Wide        1.88 ns         1.88 ns      7301764
+Add/Small/Boost       2.30 ns         2.29 ns      6055725
+Add/Large/Wide        2.10 ns         2.10 ns      7171356
+Add/Large/Boost       6.84 ns         6.84 ns      2422954
+Add/Mixed/Wide        1.78 ns         1.78 ns      7806488
+Add/Mixed/Boost       5.76 ns         5.76 ns      2371206
+Sub/Small/Wide        2.81 ns         2.81 ns      5099976
+Sub/Small/Boost       2.89 ns         2.89 ns      4832640
+Sub/Large/Wide        2.81 ns         2.81 ns      4926732
+Sub/Large/Boost       6.57 ns         6.57 ns      2272943
+Sub/Mixed/Wide        2.74 ns         2.74 ns      5297833
+Sub/Mixed/Boost       4.99 ns         4.99 ns      2811051
+Mul/Small/Wide        3.32 ns         3.32 ns      4502986
+Mul/Small/Boost       2.77 ns         2.77 ns      5896269
+Mul/Large/Wide        6.14 ns         6.14 ns      2135381
+Mul/Large/Boost       12.9 ns         12.9 ns      1105486
+Mul/Mixed/Wide        5.77 ns         5.77 ns      2464757
+Mul/Mixed/Boost       14.8 ns         14.8 ns       946250
+Div/Small/Wide        5.48 ns         5.49 ns      2536622
+Div/Small/Boost       9.94 ns         9.94 ns      1329075
+Div/Large/Wide       41.2 ns         41.2 ns       339445
+Div/Large/Boost       54.8 ns         54.8 ns       245143
+Div/Mixed/Wide       20.5 ns         20.5 ns       678880
+Div/Mixed/Boost       60.4 ns         60.4 ns       236945
+```
 

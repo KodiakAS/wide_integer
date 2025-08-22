@@ -17,7 +17,12 @@ if(ENABLE_COVERAGE)
     endif()
 endif()
 
-find_package(fmt REQUIRED)
+find_package(fmt CONFIG QUIET)
+if(NOT fmt_FOUND)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(fmt REQUIRED IMPORTED_TARGET fmt)
+    add_library(fmt::fmt ALIAS PkgConfig::fmt)
+endif()
 find_package(GTest REQUIRED)
 if(BUILD_BENCHMARK)
     find_package(benchmark REQUIRED)
@@ -56,46 +61,67 @@ target_compile_definitions(wide_integer_cxx11_test PRIVATE USE_CXX11_HEADER)
 target_link_libraries(wide_integer_cxx11_test PRIVATE fmt::fmt)
 
 
-if(BUILD_BENCHMARK)
-    add_executable(perf_cxx17
-        bench/performance.cpp
-    )
-    target_include_directories(perf_cxx17 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_compile_features(perf_cxx17 PRIVATE cxx_std_17)
-    target_link_libraries(perf_cxx17 PRIVATE fmt::fmt benchmark::benchmark)
-    target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
+add_executable(perf_cxx17
+    bench/performance.cpp
+)
+target_include_directories(perf_cxx17 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_compile_features(perf_cxx17 PRIVATE cxx_std_17)
+target_link_libraries(perf_cxx17 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_cxx17 PRIVATE -O3 -DNDEBUG)
 
-    add_executable(perf_cxx11
-        bench/performance.cpp
-    )
-    target_compile_definitions(perf_cxx11 PRIVATE USE_CXX11_HEADER)
-    target_include_directories(perf_cxx11 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
-    target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
-    target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
 
-    add_executable(perf_compare_int128
-        bench/compare_int128.cpp
-    )
-    target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
-    target_include_directories(perf_compare_int128 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
-    target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
+add_executable(perf_cxx11
+    bench/performance.cpp
+)
+target_compile_definitions(perf_cxx11 PRIVATE USE_CXX11_HEADER)
+target_include_directories(perf_cxx11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_compile_features(perf_cxx11 PRIVATE cxx_std_11)
+target_link_libraries(perf_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_cxx11 PRIVATE -O3 -DNDEBUG)
 
-    add_executable(perf_compare_int128_cxx11
-        bench/compare_int128.cpp
-    )
-    target_compile_definitions(perf_compare_int128_cxx11 PRIVATE USE_CXX11_HEADER)
-    target_compile_features(perf_compare_int128_cxx11 PRIVATE cxx_std_11)
-    target_include_directories(perf_compare_int128_cxx11 PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-    )
-    target_link_libraries(perf_compare_int128_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
-    target_compile_options(perf_compare_int128_cxx11 PRIVATE -O3 -DNDEBUG)
-endif()
+add_executable(perf_compare_int128
+    bench/compare_int128.cpp
+)
+target_compile_features(perf_compare_int128 PRIVATE cxx_std_17)
+target_include_directories(perf_compare_int128 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(perf_compare_int128 PRIVATE wide_integer fmt::fmt benchmark::benchmark)
+target_compile_options(perf_compare_int128 PRIVATE -O3 -DNDEBUG)
+
+add_executable(perf_compare_int128_cxx11
+    bench/compare_int128.cpp
+)
+target_compile_definitions(perf_compare_int128_cxx11 PRIVATE USE_CXX11_HEADER)
+target_compile_features(perf_compare_int128_cxx11 PRIVATE cxx_std_11)
+target_include_directories(perf_compare_int128_cxx11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(perf_compare_int128_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_compare_int128_cxx11 PRIVATE -O3 -DNDEBUG)
+
+add_executable(perf_compare_int256_cxx11
+    bench/compare_int256.cpp
+)
+target_compile_definitions(perf_compare_int256_cxx11 PRIVATE USE_CXX11_HEADER)
+target_compile_features(perf_compare_int256_cxx11 PRIVATE cxx_std_11)
+target_include_directories(perf_compare_int256_cxx11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(perf_compare_int256_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_compare_int256_cxx11 PRIVATE -O3 -DNDEBUG)
+
+add_executable(perf_compare_int256_random_cxx11
+    bench/compare_int256_random.cpp
+)
+target_compile_definitions(perf_compare_int256_random_cxx11 PRIVATE USE_CXX11_HEADER)
+target_compile_features(perf_compare_int256_random_cxx11 PRIVATE cxx_std_11)
+target_include_directories(perf_compare_int256_random_cxx11 PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(perf_compare_int256_random_cxx11 PRIVATE fmt::fmt benchmark::benchmark)
+target_compile_options(perf_compare_int256_random_cxx11 PRIVATE -O3 -DNDEBUG)

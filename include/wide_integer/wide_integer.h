@@ -1347,7 +1347,27 @@ public:
             {
                 integer<Bits, unsigned> numerator = make_positive(lhs);
                 integer<Bits, unsigned> denominator = make_positive(integer<Bits, Signed>(rhs));
-                integer<Bits, unsigned> quotient = integer<Bits, unsigned>::_impl::divide(numerator, std::move(denominator));
+
+                if (is_zero(denominator))
+                    throwError("Division by zero");
+
+                bool small_divisor = true;
+                for (size_t i = 1; i < item_count; ++i)
+                {
+                    if (denominator.items[little(i)] != 0)
+                    {
+                        small_divisor = false;
+                        break;
+                    }
+                }
+                if constexpr (Bits == 128 && sizeof(base_type) == 8)
+                    small_divisor = false;
+
+                integer<Bits, unsigned> quotient = numerator;
+                if (small_divisor)
+                    integer<Bits, unsigned>::_impl::div_mod_small(quotient, denominator.items[little(0)]);
+                else
+                    quotient = integer<Bits, unsigned>::_impl::divide(quotient, std::move(denominator));
 
                 if (std::is_same_v<Signed, signed> && is_negative(rhs) != is_negative(lhs))
                     quotient = operator_unary_minus(quotient);
@@ -1378,13 +1398,39 @@ public:
             }
             else
             {
-                integer<Bits, unsigned> remainder = make_positive(lhs);
+                integer<Bits, unsigned> numerator = make_positive(lhs);
                 integer<Bits, unsigned> denominator = make_positive(integer<Bits, Signed>(rhs));
-                integer<Bits, unsigned>::_impl::divide(remainder, std::move(denominator));
+
+                if (is_zero(denominator))
+                    throwError("Division by zero");
+
+                bool small_divisor = true;
+                for (size_t i = 1; i < item_count; ++i)
+                {
+                    if (denominator.items[little(i)] != 0)
+                    {
+                        small_divisor = false;
+                        break;
+                    }
+                }
+                if constexpr (Bits == 128 && sizeof(base_type) == 8)
+                    small_divisor = false;
+
+                integer<Bits, unsigned> result;
+                if (small_divisor)
+                {
+                    auto rem = integer<Bits, unsigned>::_impl::div_mod_small(numerator, denominator.items[little(0)]);
+                    result = integer<Bits, unsigned>(rem);
+                }
+                else
+                {
+                    integer<Bits, unsigned>::_impl::divide(numerator, std::move(denominator));
+                    result = numerator;
+                }
 
                 if (std::is_same_v<Signed, signed> && is_negative(lhs))
-                    remainder = operator_unary_minus(remainder);
-                return remainder;
+                    result = operator_unary_minus(result);
+                return result;
             }
         }
         else

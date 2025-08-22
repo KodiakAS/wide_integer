@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
@@ -28,7 +29,6 @@ static_assert(Base<A, B>::val == 1, "template static constexpr initialization fa
 
 TEST(WideIntegerConstexpr, Construction)
 {
-#if __cplusplus >= 201402L
     constexpr wide::integer<128, unsigned> a = 42;
     static_assert(a == 42, "constexpr constructor failed");
     constexpr wide::integer<128, signed> b = -42;
@@ -41,9 +41,19 @@ TEST(WideIntegerConstexpr, Construction)
     (void)b;
     (void)c;
     (void)d;
-#else
-    SUCCEED();
-#endif
+}
+
+TEST(WideIntegerOps, SmallMulDiv)
+{
+    using UInt256 = wide::integer<256, unsigned>;
+    UInt256 a = (UInt256(1) << 128) + 5;
+    UInt256 b = a * 3ULL;
+    EXPECT_EQ(b / 3ULL, a);
+    EXPECT_EQ(b % 3ULL, UInt256(0));
+
+    UInt256 c = UInt256(123456789);
+    EXPECT_EQ(c * 7ULL, UInt256(864197523));
+    EXPECT_EQ((c * 7ULL) / 7ULL, c);
 }
 
 enum class ArithOp
@@ -321,6 +331,18 @@ TEST(WideIntegerConversion, Int128)
     EXPECT_EQ(static_cast<__int128>(a), v);
     EXPECT_TRUE(a == v);
     EXPECT_TRUE(v == a);
+
+    __int128 neg = -v;
+    wide::integer<256, signed> b = neg;
+    EXPECT_EQ(static_cast<__int128>(b), neg);
+    EXPECT_TRUE(b == neg);
+    EXPECT_TRUE(neg == b);
+
+    unsigned __int128 u = (static_cast<unsigned __int128>(1) << 100) + 123;
+    wide::integer<256, unsigned> c = u;
+    EXPECT_EQ(static_cast<unsigned __int128>(c), u);
+    EXPECT_TRUE(c == u);
+    EXPECT_TRUE(u == c);
 }
 #endif
 
@@ -610,6 +632,36 @@ TEST(WideIntegerInt128, Arithmetic)
     EXPECT_EQ(wide::to_string(e), "2000");
 }
 
+TEST(WideIntegerInt128, SignedToUnsignedConversion)
+{
+    wide::integer<256, signed> w = 123;
+    unsigned __int128 via_static = static_cast<unsigned __int128>(w);
+    unsigned __int128 via_implicit = w;
+    EXPECT_TRUE(via_static == static_cast<unsigned __int128>(123));
+    EXPECT_TRUE(via_implicit == static_cast<unsigned __int128>(123));
+
+    wide::integer<256, signed> negative = -1;
+    unsigned __int128 static_neg = static_cast<unsigned __int128>(negative);
+    unsigned __int128 implicit_neg = negative;
+    EXPECT_TRUE(static_neg == static_cast<unsigned __int128>(-1));
+    EXPECT_TRUE(implicit_neg == static_cast<unsigned __int128>(-1));
+}
+
+TEST(WideIntegerInt128, SignedConversion)
+{
+    wide::integer<256, signed> w = 123;
+    __int128 via_static = static_cast<__int128>(w);
+    __int128 via_implicit = w;
+    EXPECT_TRUE(via_static == static_cast<__int128>(123));
+    EXPECT_TRUE(via_implicit == static_cast<__int128>(123));
+
+    wide::integer<256, signed> negative = -1;
+    __int128 static_neg = static_cast<__int128>(negative);
+    __int128 implicit_neg = negative;
+    EXPECT_TRUE(static_neg == static_cast<__int128>(-1));
+    EXPECT_TRUE(implicit_neg == static_cast<__int128>(-1));
+}
+
 template <typename T>
 void test_integral_ops()
 {
@@ -648,17 +700,21 @@ void test_float_ops()
     const __int128 ai = 1000;
     W a = ai;
     T b = static_cast<T>(123.5);
-    __int128 bi = static_cast<__int128>(b);
-    EXPECT_EQ(a + b, W(ai + bi));
-    EXPECT_EQ(b + a, W(ai + bi));
-    EXPECT_EQ(a - b, W(ai - bi));
-    EXPECT_EQ(b - a, W(bi - ai));
-    EXPECT_EQ(a * b, W(ai * bi));
-    EXPECT_EQ(b * a, W(ai * bi));
-    EXPECT_EQ(a / b, W(ai / bi));
-    EXPECT_EQ(b / a, W(bi / ai));
-    EXPECT_EQ(a % b, W(ai % bi));
-    EXPECT_EQ(b % a, W(bi % ai));
+    long double bd = static_cast<long double>(b);
+    __int128 expected_add = static_cast<__int128>(static_cast<long double>(ai) + bd);
+    __int128 expected_sub = static_cast<__int128>(static_cast<long double>(ai) - bd);
+    __int128 expected_rsub = static_cast<__int128>(bd - static_cast<long double>(ai));
+    __int128 expected_mul = static_cast<__int128>(static_cast<long double>(ai) * bd);
+    __int128 expected_div = static_cast<__int128>(static_cast<long double>(ai) / bd);
+    __int128 expected_rdiv = static_cast<__int128>(bd / static_cast<long double>(ai));
+    EXPECT_EQ(W(a + b), W(expected_add));
+    EXPECT_EQ(W(b + a), W(expected_add));
+    EXPECT_EQ(W(a - b), W(expected_sub));
+    EXPECT_EQ(W(b - a), W(expected_rsub));
+    EXPECT_EQ(W(a * b), W(expected_mul));
+    EXPECT_EQ(W(b * a), W(expected_mul));
+    EXPECT_EQ(W(a / b), W(expected_div));
+    EXPECT_EQ(W(b / a), W(expected_rdiv));
     EXPECT_TRUE(a > b);
     EXPECT_TRUE(b < a);
     EXPECT_TRUE(a >= b);
@@ -679,10 +735,53 @@ TEST(WideIntegerBuiltin, IntegralTypes)
     test_integral_ops<unsigned __int128>();
 }
 
-#ifdef USE_CXX11_HEADER
+TEST(WideIntegerNumericLimits, Basic)
+{
+    using U = wide::integer<128, unsigned>;
+    using S = wide::integer<128, signed>;
+    EXPECT_EQ(std::numeric_limits<U>::min(), U(0));
+    EXPECT_EQ(std::numeric_limits<U>::max(), ~U(0));
+    S smin = std::numeric_limits<S>::min();
+    S smax = std::numeric_limits<S>::max();
+    EXPECT_EQ(smax, ~smin);
+    S expected = S(1);
+    expected <<= 127;
+    expected = -expected;
+    EXPECT_EQ(smin, expected);
+}
+
 TEST(WideIntegerBuiltin, FloatingTypes)
 {
     test_float_ops<float>();
     test_float_ops<double>();
 }
-#endif
+
+TEST(WideIntegerDivision, NegativeOperands)
+{
+    using W = wide::integer<128, signed>;
+    auto check = [](long long lhs, long long rhs)
+    {
+        W wl = lhs;
+        W wr = rhs;
+        W q = wl / wr;
+        __int128 expected = static_cast<__int128>(lhs) / static_cast<__int128>(rhs);
+        EXPECT_EQ(q, W(expected));
+    };
+    check(-7, 3);
+    check(7, -3);
+    check(-8, 2);
+    check(-8, -2);
+    check(-1, 2);
+}
+
+TEST(WideInteger256, Division)
+{
+    using W = wide::integer<256, unsigned>;
+    W a = (W{1} << 200) + 123456789ULL;
+    uint64_t div = 987654321ULL;
+    W q = a / div;
+    W r = a % div;
+    EXPECT_EQ(q * div + r, a);
+    EXPECT_EQ(wide::to_string(q), "1627024769791889844363837995440879160110719541703693");
+    EXPECT_EQ(static_cast<uint64_t>(r), 865650712ULL);
+}
