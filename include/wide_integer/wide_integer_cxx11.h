@@ -70,56 +70,69 @@ struct limbs_equal<0>
     }
 };
 
-template <size_t I>
-struct add_limbs
+template <size_t L>
+inline void add_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
 {
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
     {
-        add_limbs<I - 1>::eval(lhs, rhs, carry);
-        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[I]) + rhs.data_[I] + carry;
-        lhs.data_[I] = static_cast<typename Int::limb_type>(sum);
+        unsigned __int128 sum = static_cast<unsigned __int128>(lhs[i]) + rhs[i] + carry;
+        lhs[i] = static_cast<uint64_t>(sum);
         carry = sum >> 64;
     }
-};
-
-template <>
-struct add_limbs<0>
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & carry) noexcept
-    {
-        unsigned __int128 sum = static_cast<unsigned __int128>(lhs.data_[0]) + rhs.data_[0] + carry;
-        lhs.data_[0] = static_cast<typename Int::limb_type>(sum);
-        carry = sum >> 64;
-    }
-};
-
-template <size_t I>
-struct sub_limbs
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
-    {
-        sub_limbs<I - 1>::eval(lhs, rhs, borrow);
-        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[I]) - rhs.data_[I] - borrow;
-        lhs.data_[I] = static_cast<typename Int::limb_type>(diff);
-        borrow = (diff >> 127) & 1;
-    }
-};
-
-template <>
-struct sub_limbs<0>
-{
-    template <typename Int>
-    static void eval(Int & lhs, const Int & rhs, unsigned __int128 & borrow) noexcept
-    {
-        unsigned __int128 diff = static_cast<unsigned __int128>(lhs.data_[0]) - rhs.data_[0] - borrow;
-        lhs.data_[0] = static_cast<typename Int::limb_type>(diff);
-        borrow = (diff >> 127) & 1;
-    }
-};
 }
+
+template <>
+inline void add_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 sum;
+    sum = static_cast<unsigned __int128>(lhs[0]) + rhs[0];
+    lhs[0] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[1]) + rhs[1] + (sum >> 64);
+    lhs[1] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[2]) + rhs[2] + (sum >> 64);
+    lhs[2] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[3]) + rhs[3] + (sum >> 64);
+    lhs[3] = static_cast<uint64_t>(sum);
+}
+
+template <size_t L>
+inline void sub_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 borrow = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 lhs_i = lhs[i];
+        unsigned __int128 subtrahend = static_cast<unsigned __int128>(rhs[i]) + borrow;
+        lhs[i] = static_cast<uint64_t>(lhs_i - subtrahend);
+        borrow = lhs_i < subtrahend;
+    }
+}
+
+template <>
+inline void sub_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 borrow = 0;
+    unsigned __int128 lhs0 = lhs[0];
+    unsigned __int128 rhs0 = rhs[0];
+    lhs[0] = static_cast<uint64_t>(lhs0 - rhs0);
+    borrow = lhs0 < rhs0;
+
+    unsigned __int128 lhs1 = lhs[1];
+    unsigned __int128 rhs1 = static_cast<unsigned __int128>(rhs[1]) + borrow;
+    lhs[1] = static_cast<uint64_t>(lhs1 - rhs1);
+    borrow = lhs1 < rhs1;
+
+    unsigned __int128 lhs2 = lhs[2];
+    unsigned __int128 rhs2 = static_cast<unsigned __int128>(rhs[2]) + borrow;
+    lhs[2] = static_cast<uint64_t>(lhs2 - rhs2);
+    borrow = lhs2 < rhs2;
+
+    unsigned __int128 lhs3 = lhs[3];
+    unsigned __int128 rhs3 = static_cast<unsigned __int128>(rhs[3]) + borrow;
+    lhs[3] = static_cast<uint64_t>(lhs3 - rhs3);
+}
+} // namespace detail
 
 template <size_t Bits, typename Signed>
 class integer
@@ -129,10 +142,6 @@ public:
     using limb_type = uint64_t;
     template <size_t>
     friend struct detail::limbs_equal;
-    template <size_t>
-    friend struct detail::add_limbs;
-    template <size_t>
-    friend struct detail::sub_limbs;
     template <size_t, typename>
     friend class std::numeric_limits;
 
@@ -252,15 +261,13 @@ public:
 
     integer & operator+=(const integer & rhs) noexcept
     {
-        unsigned __int128 carry = 0;
-        detail::add_limbs<limbs - 1>::eval(*this, rhs, carry);
+        detail::add_limbs<limbs>(data_, rhs.data_);
         return *this;
     }
 
     integer & operator-=(const integer & rhs) noexcept
     {
-        unsigned __int128 borrow = 0;
-        detail::sub_limbs<limbs - 1>::eval(*this, rhs, borrow);
+        detail::sub_limbs<limbs>(data_, rhs.data_);
         return *this;
     }
 
