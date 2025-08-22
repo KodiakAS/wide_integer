@@ -6,13 +6,22 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y cmake build-essential clang-format libfmt-dev libgtest-dev libbenchmark-dev lcov libboost-dev
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew update
+            brew install cmake clang-format fmt googletest benchmark lcov boost
+          fi
       - name: Configure
         run: cmake -S . -B build -DENABLE_COVERAGE=ON
       - name: Build
