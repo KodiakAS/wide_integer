@@ -80,19 +80,45 @@ jobs:
         run: |
           python - <<'PYTHON'
           import json
-          import os
-          with open('perf_compare_int256_cxx11.json') as f:
-              data = json.load(f)
+
+          data = json.load(
+              open('perf_compare_int256_cxx11.json', 'r', encoding='utf-8')
+          )
           lines = [
               "| Benchmark | CPU Time (ns) | Real Time (ns) |",
               "|---|---:|---:|",
           ]
           for b in data.get("benchmarks", []):
-              name = b.get("name", "")
-              cpu = b.get("cpu_time", 0.0)
-              real = b.get("real_time", 0.0)
-              lines.append(f"| {name} | {cpu:.2f} | {real:.2f} |")
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
-              out.write("### perf_compare_int256_cxx11\n")
+              lines.append(
+                  f"| {b.get('name', '')} | "
+                  f"{b.get('cpu_time', 0.0):.2f} | "
+                  f"{b.get('real_time', 0.0):.2f} |"
+              )
+          with open(
+              'perf_compare_int256_cxx11.md', 'w', encoding='utf-8'
+          ) as out:
               out.write("\n".join(lines) + "\n")
           PYTHON
+      - name: Find pull request
+        id: find_pr
+        uses: peter-evans/find-pull-request@v3
+        with:
+          commit: ${{ github.sha }}
+      - name: Comment benchmark result
+        if: steps.find_pr.outputs.pr-number != ''
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.find_pr.outputs.pr-number }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(
+              'perf_compare_int256_cxx11.md',
+              'utf8'
+            );
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: process.env.PR_NUMBER,
+              body: `### perf_compare_int256_cxx11\n${body}`,
+            });
