@@ -102,9 +102,9 @@ Mul/Mixed/Wide        5.77 ns         5.77 ns      2464757
 Mul/Mixed/Boost       14.8 ns         14.8 ns       946250
 Div/Small/Wide        5.48 ns         5.49 ns      2536622
 Div/Small/Boost       9.94 ns         9.94 ns      1329075
-Div/Large/Wide         704 ns          704 ns        19714
+Div/Large/Wide       41.2 ns         41.2 ns       339445
 Div/Large/Boost       54.8 ns         54.8 ns       245143
-Div/Mixed/Wide         726 ns          726 ns        19164
+Div/Mixed/Wide       20.5 ns         20.5 ns       678880
 Div/Mixed/Boost       60.4 ns         60.4 ns       236945
 ```
 

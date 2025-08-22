@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -690,20 +691,22 @@ public:
                 divisor = -divisor;
         }
         integer result;
-        bool small_divisor = true;
-        for (size_t i = 1; i < limbs; ++i)
-            if (divisor.data_[i] != 0)
-            {
-                small_divisor = false;
-                break;
-            }
+        size_t divisor_limbs = limbs;
+        while (divisor_limbs > 0 && divisor.data_[divisor_limbs - 1] == 0)
+            --divisor_limbs;
+        bool small_divisor = divisor_limbs == 1;
         if (small_divisor)
         {
             lhs.div_mod_small(divisor.data_[0], result);
         }
         else
         {
-            if (limbs == 2)
+            int pow_bit;
+            if (is_power_of_two(divisor, pow_bit))
+            {
+                result = lhs >> pow_bit;
+            }
+            else if (limbs == 2)
             {
                 unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
                 unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
@@ -718,6 +721,10 @@ public:
                 unsigned __int128 q = a / b;
                 result.data_[0] = static_cast<limb_type>(q);
                 result.data_[1] = static_cast<limb_type>(q >> 64);
+            }
+            else if (limbs <= 4)
+            {
+                result = div_large(lhs, divisor, divisor_limbs);
             }
             else
             {
@@ -1142,6 +1149,109 @@ private:
             rem %= div;
         }
         return static_cast<limb_type>(rem);
+    }
+
+    static bool is_power_of_two(const integer & v, int & bit_index) noexcept
+    {
+        bit_index = -1;
+        bool found = false;
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            limb_type limb = v.data_[i];
+            if (limb)
+            {
+                if (limb & (limb - 1))
+                    return false;
+                if (found)
+                    return false;
+                bit_index = static_cast<int>(i * 64 + __builtin_ctzll(limb));
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    static integer div_large(integer lhs, const integer & divisor, size_t div_limbs) noexcept
+    {
+        integer quotient;
+        size_t n = limbs;
+        while (n > 0 && lhs.data_[n - 1] == 0)
+            --n;
+        if (n < div_limbs)
+            return quotient;
+
+        std::array<limb_type, limbs + 1> u = {};
+        std::array<limb_type, limbs> v = {};
+
+        int shift = __builtin_clzll(divisor.data_[div_limbs - 1]);
+        limb_type carry = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            limb_type cur = lhs.data_[i];
+            u[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+        u[n] = carry;
+
+        carry = 0;
+        for (size_t i = 0; i < div_limbs; ++i)
+        {
+            limb_type cur = divisor.data_[i];
+            v[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+
+        for (int j = static_cast<int>(n - div_limbs); j >= 0; --j)
+        {
+            unsigned __int128 numerator = (static_cast<unsigned __int128>(u[j + div_limbs]) << 64) | u[j + div_limbs - 1];
+            unsigned __int128 qhat = numerator / v[div_limbs - 1];
+            unsigned __int128 rhat = numerator % v[div_limbs - 1];
+
+            if (div_limbs > 1)
+            {
+                while (qhat == (static_cast<unsigned __int128>(1) << 64) || qhat * v[div_limbs - 2] > ((rhat << 64) | u[j + div_limbs - 2]))
+                {
+                    --qhat;
+                    rhat += v[div_limbs - 1];
+                    if (rhat >= (static_cast<unsigned __int128>(1) << 64))
+                        break;
+                }
+            }
+
+            unsigned __int128 borrow = 0;
+            for (size_t i = 0; i < div_limbs; ++i)
+            {
+                unsigned __int128 p = qhat * v[i] + borrow;
+                if (u[j + i] < static_cast<limb_type>(p))
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = (p >> 64) + 1;
+                }
+                else
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = p >> 64;
+                }
+            }
+            if (u[j + div_limbs] < static_cast<limb_type>(borrow))
+            {
+                unsigned __int128 carry2 = 0;
+                for (size_t i = 0; i < div_limbs; ++i)
+                {
+                    unsigned __int128 t2 = static_cast<unsigned __int128>(u[j + i]) + v[i] + carry2;
+                    u[j + i] = static_cast<limb_type>(t2);
+                    carry2 = t2 >> 64;
+                }
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) + carry2);
+                --qhat;
+            }
+            else
+            {
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) - borrow);
+            }
+            quotient.data_[j] = static_cast<limb_type>(qhat);
+        }
+        return quotient;
     }
 
     limb_type data_[limbs] = {};
