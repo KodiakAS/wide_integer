@@ -18,30 +18,19 @@ jobs:
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
             sudo apt-get install -y cmake build-essential clang-format \
-              libfmt-dev libgtest-dev lcov libboost-dev
+              libfmt-dev libgtest-dev libboost-dev
           elif [[ "$RUNNER_OS" == "macOS" ]]; then
             brew update
             brew install cmake clang-format fmt googletest boost
           fi
       - name: Configure
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
-          else
-            cmake -S . -B build -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
-          fi
+        run: cmake -S . -B build -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
       - name: Build
         run: cmake --build build --config Debug
       - name: Run tests
         run: |
           cd build
           ctest --output-on-failure
-      - name: Generate coverage
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
-          lcov --list coverage.info
       - name: Check code format
         run: |
           FILES=$(git ls-files '*.cpp' '*.hpp' '*.h')
@@ -49,6 +38,29 @@ jobs:
             clang-format -i --style=file $FILES
             git diff --exit-code
           fi
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential clang-format \
+            libfmt-dev libgtest-dev lcov libboost-dev
+      - name: Configure
+        run: cmake -S . -B build -DENABLE_COVERAGE=ON -DWI_BUILD_TESTS=ON -DWI_BUILD_BENCHMARKS=OFF
+      - name: Build
+        run: cmake --build build --config Debug
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure || true
+      - name: Generate coverage
+        run: |
+          lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
+          lcov --remove coverage.info '/usr/*' '*/tests/*' --output-file coverage.info
+          lcov --list coverage.info
 
   benchmark:
     runs-on: ubuntu-latest
