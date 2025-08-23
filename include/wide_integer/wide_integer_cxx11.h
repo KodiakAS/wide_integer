@@ -710,6 +710,7 @@ public:
         bool small_divisor = divisor_limbs == 1;
         if (small_divisor)
         {
+            // single-limb divisor: use fast division/remainder routine
             lhs.div_mod_small(divisor.data_[0], result);
         }
         else
@@ -717,10 +718,12 @@ public:
             int pow_bit;
             if (is_power_of_two(divisor, pow_bit))
             {
+                // power-of-two divisor turns into a simple shift
                 result = lhs >> pow_bit;
             }
             else if (limbs == 2)
             {
+                // both operands are 128-bit wide
                 unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
                 unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
                 unsigned __int128 q = a / b;
@@ -734,6 +737,7 @@ public:
                     --lhs_limbs;
                 if (lhs_limbs <= 2)
                 {
+                    // operands fit into two limbs; reuse the 128-bit path
                     unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
                     unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
                     unsigned __int128 q = a / b;
@@ -742,52 +746,24 @@ public:
                 }
                 else if (limbs <= 4)
                 {
+                    // small operand size: fall back to Knuth division
                     result = div_large(lhs, divisor, divisor_limbs);
                 }
                 else
                 {
-                    int shift = lhs.highest_bit() - divisor.highest_bit();
-                    integer current(1);
-                    if (shift > 0)
-                    {
-                        divisor <<= shift;
-                        current <<= shift;
-                    }
-                    for (; shift >= 0; --shift)
-                    {
-                        if (!(lhs < divisor))
-                        {
-                            lhs -= divisor;
-                            result |= current;
-                        }
-                        divisor >>= 1;
-                        current >>= 1;
-                    }
+                    // generic shift-subtract algorithm for very large numbers
+                    result = div_shift_subtract(lhs, divisor);
                 }
             }
             else if (limbs <= 4)
             {
+                // up to 256-bit operands: Knuth division
                 result = div_large(lhs, divisor, divisor_limbs);
             }
             else
             {
-                int shift = lhs.highest_bit() - divisor.highest_bit();
-                integer current(1);
-                if (shift > 0)
-                {
-                    divisor <<= shift;
-                    current <<= shift;
-                }
-                for (; shift >= 0; --shift)
-                {
-                    if (!(lhs < divisor))
-                    {
-                        lhs -= divisor;
-                        result |= current;
-                    }
-                    divisor >>= 1;
-                    current >>= 1;
-                }
+                // generic shift-subtract algorithm
+                result = div_shift_subtract(lhs, divisor);
             }
         }
         if (std::is_same<Signed, signed>::value && lhs_neg != rhs_neg)
@@ -1194,6 +1170,29 @@ private:
             }
         }
         return found;
+    }
+
+    static integer div_shift_subtract(integer lhs, integer divisor) noexcept
+    {
+        integer result;
+        int shift = lhs.highest_bit() - divisor.highest_bit();
+        integer current(1);
+        if (shift > 0)
+        {
+            divisor <<= shift;
+            current <<= shift;
+        }
+        for (; shift >= 0; --shift)
+        {
+            if (!(lhs < divisor))
+            {
+                lhs -= divisor;
+                result |= current;
+            }
+            divisor >>= 1;
+            current >>= 1;
+        }
+        return result;
     }
 
     static integer div_large(integer lhs, const integer & divisor, size_t div_limbs) noexcept
