@@ -76,6 +76,5 @@ jobs:
         run: cmake --build build --config Release
       - name: Run benchmarks
         run: |
-          build/perf_cxx17 --benchmark_min_time=0.01s
-          build/perf_cxx11 --benchmark_min_time=0.01s
-          build/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+          build/perf --benchmark_min_time=0.01s
+          build/perf_compare_int256 --benchmark_min_time=0.01s

@@ -1,10 +1,6 @@
 #include <benchmark/benchmark.h>
 
-#ifdef USE_CXX11_HEADER
-#    include <wide_integer/wide_integer_cxx11.h>
-#else
-#    include <wide_integer/wide_integer.h>
-#endif
+#include <wide_integer/wide_integer.h>
 
 template <size_t Bits>
 using WInt = wide::integer<Bits, unsigned>;

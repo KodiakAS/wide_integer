@@ -7,11 +7,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <fmt/format.h>
 
-#ifdef USE_CXX11_HEADER
-#    include <wide_integer/wide_integer_cxx11.h>
-#else
-#    include <wide_integer/wide_integer.h>
-#endif
+#include <wide_integer/wide_integer.h>
 
 using WInt = wide::integer<256, signed>;
 using BInt = boost::multiprecision::int256_t;

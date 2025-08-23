@@ -21,9 +21,8 @@ test: $(TEST_BUILD_DIR)/Makefile
 # Build and run benchmarks
 bench: $(BENCH_BUILD_DIR)/Makefile
 	cmake --build $(BENCH_BUILD_DIR)
-	$(BENCH_BUILD_DIR)/perf_cxx17
-	$(BENCH_BUILD_DIR)/perf_cxx11
-	$(BENCH_BUILD_DIR)/perf_compare_int256_cxx11
+	$(BENCH_BUILD_DIR)/perf
+	$(BENCH_BUILD_DIR)/perf_compare_int256
 
 # Build, test and generate coverage report
 coverage: $(COVERAGE_DIR)/Makefile

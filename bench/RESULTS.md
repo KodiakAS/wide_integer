@@ -8,15 +8,15 @@ cmake -S . -B build-release-bench -DWI_BUILD_TESTS=OFF -DWI_BUILD_BENCHMARKS=ON 
 cmake --build build-release-bench --config Release -j$(nproc)
 ```
 
-## perf_cxx11
+## perf
 
-Exercises the C++11 header for basic arithmetic on unsigned integers of 256,
+Exercises the header for basic arithmetic on unsigned integers of 256,
 512 and 1024 bits.
 
 To run:
 
 ```bash
-./build-release-bench/perf_cxx11 --benchmark_min_time=0.01s
+./build-release-bench/perf --benchmark_min_time=0.01s
 ```
 
 Sample output:
@@ -39,46 +39,16 @@ BM_ToString<512>              7183 ns         7184 ns         1923
 BM_ToString<1024>            31816 ns        31819 ns          365
 ```
 
-## perf_cxx17
+## perf_compare_int256
 
-Uses the C++17 header for the same set of operations.
-
-To run:
-
-```bash
-./build-release-bench/perf_cxx17 --benchmark_min_time=0.01s
-```
-
-Sample output:
-
-```text
-BM_Addition<256>              1.67 ns         1.67 ns      8693724
-BM_Addition<512>              6.81 ns         6.81 ns      1933469
-BM_Addition<1024>             17.9 ns         17.9 ns       737889
-BM_Subtraction<256>           1.82 ns         1.82 ns      8569431
-BM_Subtraction<512>           5.83 ns         5.83 ns      2500850
-BM_Subtraction<1024>          18.5 ns         18.5 ns       766062
-BM_Multiplication<256>        5.35 ns         5.35 ns      2667776
-BM_Multiplication<512>        48.5 ns         48.5 ns       301766
-BM_Multiplication<1024>        173 ns          172 ns        81792
-BM_Division<256>              20.8 ns         20.8 ns       701581
-BM_Division<512>              65.8 ns         65.8 ns       210376
-BM_Division<1024>              146 ns          146 ns        99127
-BM_ToString<256>              2124 ns         2124 ns         6878
-BM_ToString<512>             10303 ns        10304 ns         1333
-BM_ToString<1024>            49169 ns        49175 ns          284
-```
-
-## perf_compare_int256_cxx11
-
-Compares the C++11 implementation of `wide::integer<256, signed>` against
+Compares the implementation of `wide::integer<256, signed>` against
 Boost.Multiprecision's `int256_t` across different operand sizes and sign
 combinations.
 
 To run:
 
 ```bash
-./build-release-bench/perf_compare_int256_cxx11 --benchmark_min_time=0.01s
+./build-release-bench/perf_compare_int256 --benchmark_min_time=0.01s
 ```
 
 Sample output:
