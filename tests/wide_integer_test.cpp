@@ -3,11 +3,7 @@
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 
-#ifdef USE_CXX11_HEADER
-#    include <wide_integer/wide_integer_cxx11.h>
-#else
-#    include <wide_integer/wide_integer.h>
-#endif
+#include <wide_integer/wide_integer.h>
 
 struct A
 {

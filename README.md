@@ -1,7 +1,7 @@
 # wide_integer
 An independent, header-only C++ library built on ClickHouse's wide integer work to implement high-performance fixed-width integers.
 
-- Provides separate C++11 and C++17 implementations to fit different project requirements
+- Implements a C++11 version to fit projects requiring older standards
 - Guarantees that bit widths exactly match their definition (e.g., `wide::integer<256, unsigned>` is exactly 256 bits)
 - Supports arithmetic operations and conversions with standard C++ integer types
 - Depends only on `fmt` for formatted output

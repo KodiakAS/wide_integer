@@ -1,2108 +1,1401 @@
 #pragma once
 
-///////////////////////////////////////////////////////////////
-//  Distributed under the Boost Software License, Version 1.0.
-//  (See at http://www.boost.org/LICENSE_1_0.txt)
-///////////////////////////////////////////////////////////////
-
-/*  Divide and multiply
- *
- *
- * Copyright (c) 2008
- * Evan Teran
- *
- * Permission to use, copy, modify, and distribute this software and its
- * documentation for any purpose and without fee is hereby granted, provided
- * that the above copyright notice appears in all copies and that both the
- * copyright notice and this permission notice appear in supporting
- * documentation, and that the same name not be used in advertising or
- * publicity pertaining to distribution of the software without specific,
- * written prior permission. We make no representations about the
- * suitability this software for any purpose. It is provided "as is"
- * without express or implied warranty.
- */
-
-#include <algorithm>
-#include <cassert>
-#include <cfloat>
+#include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
-#include <functional>
-#include <initializer_list>
 #include <limits>
 #include <ostream>
-#include <stdexcept>
 #include <string>
-#include <tuple>
 #include <type_traits>
 #include <fmt/format.h>
-#include "endian_compat.h"
-
-#if __cplusplus < 202002L
-namespace std
-{
-template <class T>
-using remove_cvref_t = typename remove_cv<typename remove_reference<T>::type>::type;
-}
-#endif
-
-// NOLINTBEGIN(*)
 
 namespace wide
 {
+
 template <size_t Bits, typename Signed>
 class integer;
+
+using Int128 = integer<128, signed>;
+using UInt128 = integer<128, unsigned>;
+using Int256 = integer<256, signed>;
+using UInt256 = integer<256, unsigned>;
+
+template <size_t Bits, typename Signed>
+std::string to_string(const integer<Bits, Signed> & value);
+
+template <size_t Bits, typename Signed>
+std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value);
+
+namespace detail
+{
+template <size_t Bits>
+struct storage_count
+{
+    static_assert(Bits % 64 == 0, "Bits must be multiple of 64");
+    static constexpr size_t value = Bits / 64;
+};
+
+template <size_t... I>
+struct index_sequence
+{
+};
+
+template <size_t N, size_t... I>
+struct make_index_sequence : make_index_sequence<N - 1, N - 1, I...>
+{
+};
+
+template <size_t... I>
+struct make_index_sequence<0, I...>
+{
+    using type = index_sequence<I...>;
+};
+
+template <size_t I>
+struct limbs_equal
+{
+    template <typename Int>
+    static constexpr bool eval(const Int & lhs, const Int & rhs) noexcept
+    {
+        return lhs.data_[I] == rhs.data_[I] && limbs_equal<I - 1>::eval(lhs, rhs);
+    }
+};
+
+template <>
+struct limbs_equal<0>
+{
+    template <typename Int>
+    static constexpr bool eval(const Int & lhs, const Int & rhs) noexcept
+    {
+        return lhs.data_[0] == rhs.data_[0];
+    }
+};
+
+template <size_t L>
+inline void add_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 sum = static_cast<unsigned __int128>(lhs[i]) + rhs[i] + carry;
+        lhs[i] = static_cast<uint64_t>(sum);
+        carry = sum >> 64;
+    }
 }
 
-namespace std
+template <>
+inline void add_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
 {
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-struct common_type<wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>;
-
-template <size_t Bits, typename Signed, typename Arithmetic>
-struct common_type<wide::integer<Bits, Signed>, Arithmetic>;
-
-template <typename Arithmetic, size_t Bits, typename Signed>
-struct common_type<Arithmetic, wide::integer<Bits, Signed>>;
-
+    unsigned __int128 sum;
+    sum = static_cast<unsigned __int128>(lhs[0]) + rhs[0];
+    lhs[0] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[1]) + rhs[1] + (sum >> 64);
+    lhs[1] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[2]) + rhs[2] + (sum >> 64);
+    lhs[2] = static_cast<uint64_t>(sum);
+    sum = static_cast<unsigned __int128>(lhs[3]) + rhs[3] + (sum >> 64);
+    lhs[3] = static_cast<uint64_t>(sum);
 }
 
-namespace wide
+template <size_t L>
+inline void sub_limbs(uint64_t * lhs, const uint64_t * rhs) noexcept
 {
+    unsigned __int128 borrow = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 lhs_i = lhs[i];
+        unsigned __int128 subtrahend = static_cast<unsigned __int128>(rhs[i]) + borrow;
+        lhs[i] = static_cast<uint64_t>(lhs_i - subtrahend);
+        borrow = lhs_i < subtrahend;
+    }
+}
+
+template <>
+inline void sub_limbs<4>(uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    unsigned __int128 borrow = 0;
+    unsigned __int128 lhs0 = lhs[0];
+    unsigned __int128 rhs0 = rhs[0];
+    lhs[0] = static_cast<uint64_t>(lhs0 - rhs0);
+    borrow = lhs0 < rhs0;
+
+    unsigned __int128 lhs1 = lhs[1];
+    unsigned __int128 rhs1 = static_cast<unsigned __int128>(rhs[1]) + borrow;
+    lhs[1] = static_cast<uint64_t>(lhs1 - rhs1);
+    borrow = lhs1 < rhs1;
+
+    unsigned __int128 lhs2 = lhs[2];
+    unsigned __int128 rhs2 = static_cast<unsigned __int128>(rhs[2]) + borrow;
+    lhs[2] = static_cast<uint64_t>(lhs2 - rhs2);
+    borrow = lhs2 < rhs2;
+
+    unsigned __int128 lhs3 = lhs[3];
+    unsigned __int128 rhs3 = static_cast<unsigned __int128>(rhs[3]) + borrow;
+    lhs[3] = static_cast<uint64_t>(lhs3 - rhs3);
+}
+
+inline void mul_128(uint64_t * res, const uint64_t * a, const uint64_t * b) noexcept
+{
+    unsigned __int128 a_lo = a[0];
+    unsigned __int128 a_hi = a[1];
+    unsigned __int128 b_lo = b[0];
+    unsigned __int128 b_hi = b[1];
+
+    unsigned __int128 lo = a_lo * b_lo;
+    unsigned __int128 mid = a_lo * b_hi + a_hi * b_lo + (lo >> 64);
+    unsigned __int128 hi = a_hi * b_hi + (mid >> 64);
+
+    res[0] = static_cast<uint64_t>(lo);
+    res[1] = static_cast<uint64_t>(mid);
+    res[2] = static_cast<uint64_t>(hi);
+    res[3] = static_cast<uint64_t>(hi >> 64);
+}
+
+template <size_t L>
+inline void mul_limbs(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 carry = 0;
+        for (size_t j = 0; j + i < L; ++j)
+        {
+            unsigned __int128 cur = static_cast<unsigned __int128>(res[i + j]) + static_cast<unsigned __int128>(lhs[i]) * rhs[j] + carry;
+            res[i + j] = static_cast<uint64_t>(cur);
+            carry = cur >> 64;
+        }
+    }
+}
+
+template <>
+inline void mul_limbs<4>(uint64_t * res, const uint64_t * lhs, const uint64_t * rhs) noexcept
+{
+    if ((lhs[2] | lhs[3] | rhs[2] | rhs[3]) == 0)
+    {
+        mul_128(res, lhs, rhs);
+        return;
+    }
+
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half b01 = (Half(rhs[1]) << 64) | rhs[0];
+    Half b23 = (Half(rhs[3]) << 64) | rhs[2];
+
+    Half r23 = a23 * b01 + a01 * b23 + Half(lhs[1]) * rhs[1];
+    Half r01 = Half(lhs[0]) * rhs[0];
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs[0];
+
+    res[0] = static_cast<uint64_t>(r01);
+    res[3] = static_cast<uint64_t>(r23 >> 64);
+
+    Half cross2 = Half(lhs[0]) * rhs[1];
+    cross += cross2;
+    if (cross < cross2)
+        ++res[3];
+
+    r12 += cross;
+    if (r12 < cross)
+        ++res[3];
+
+    res[1] = static_cast<uint64_t>(r12);
+    res[2] = static_cast<uint64_t>(r12 >> 64);
+}
+
+template <size_t L>
+inline void mul_limb(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    unsigned __int128 carry = 0;
+    for (size_t i = 0; i < L; ++i)
+    {
+        unsigned __int128 cur = static_cast<unsigned __int128>(lhs[i]) * rhs + carry;
+        lhs[i] = static_cast<uint64_t>(cur);
+        carry = cur >> 64;
+    }
+}
+
+template <>
+inline void mul_limb<4>(uint64_t * lhs, uint64_t rhs) noexcept
+{
+    using Half = unsigned __int128;
+    Half a01 = (Half(lhs[1]) << 64) | lhs[0];
+    Half a23 = (Half(lhs[3]) << 64) | lhs[2];
+    Half r23 = a23 * rhs;
+    Half r01 = Half(lhs[0]) * rhs;
+    Half r12 = (r01 >> 64) + (r23 << 64);
+    Half cross = Half(lhs[1]) * rhs;
+
+    lhs[0] = static_cast<uint64_t>(r01);
+    lhs[3] = static_cast<uint64_t>(r23 >> 64);
+
+    r12 += cross;
+    if (r12 < cross)
+        ++lhs[3];
+
+    lhs[1] = static_cast<uint64_t>(r12);
+    lhs[2] = static_cast<uint64_t>(r12 >> 64);
+}
+} // namespace detail
 
 template <size_t Bits, typename Signed>
 class integer
 {
 public:
-    using base_type = uint64_t;
-    using signed_base_type = int64_t;
+    static constexpr size_t limbs = detail::storage_count<Bits>::value;
+    using limb_type = uint64_t;
+    template <size_t>
+    friend struct detail::limbs_equal;
+    friend class std::numeric_limits<integer<Bits, Signed>>;
 
-    // ctors
     constexpr integer() noexcept = default;
 
-    template <typename T>
-    constexpr integer(T rhs) noexcept;
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    constexpr integer(T v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
 
-    template <typename T>
-    constexpr integer(std::initializer_list<T> il) noexcept;
+    constexpr integer(__int128 v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
 
-    // assignment
-    template <size_t Bits2, typename Signed2>
-    constexpr integer<Bits, Signed> & operator=(const integer<Bits2, Signed2> & rhs) noexcept;
-
-    template <typename Arithmetic>
-    constexpr integer<Bits, Signed> & operator=(Arithmetic rhs) noexcept;
-
-    template <typename Arithmetic>
-    constexpr integer<Bits, Signed> & operator*=(const Arithmetic & rhs);
-
-    template <typename Arithmetic>
-    constexpr integer<Bits, Signed> & operator/=(const Arithmetic & rhs);
-
-    template <typename Arithmetic>
-    constexpr integer<Bits, Signed> & operator+=(const Arithmetic & rhs) noexcept(std::is_same_v<Signed, unsigned>);
-
-    template <typename Arithmetic>
-    constexpr integer<Bits, Signed> & operator-=(const Arithmetic & rhs) noexcept(std::is_same_v<Signed, unsigned>);
-
-    template <typename Integral>
-    constexpr integer<Bits, Signed> & operator%=(const Integral & rhs);
-
-    template <typename Integral>
-    constexpr integer<Bits, Signed> & operator&=(const Integral & rhs) noexcept;
-
-    template <typename Integral>
-    constexpr integer<Bits, Signed> & operator|=(const Integral & rhs) noexcept;
-
-    template <typename Integral>
-    constexpr integer<Bits, Signed> & operator^=(const Integral & rhs) noexcept;
-
-    constexpr integer<Bits, Signed> & operator<<=(int n) noexcept;
-    constexpr integer<Bits, Signed> & operator>>=(int n) noexcept;
-
-    constexpr integer<Bits, Signed> & operator++() noexcept(std::is_same_v<Signed, unsigned>);
-    constexpr integer<Bits, Signed> operator++(int) noexcept(std::is_same_v<Signed, unsigned>);
-    constexpr integer<Bits, Signed> & operator--() noexcept(std::is_same_v<Signed, unsigned>);
-    constexpr integer<Bits, Signed> operator--(int) noexcept(std::is_same_v<Signed, unsigned>);
-
-    // observers
-
-    constexpr explicit operator bool() const noexcept;
-
-    template <typename T, std::enable_if_t<std::is_arithmetic_v<T>, int> = 0>
-    constexpr operator T() const noexcept;
-
-    constexpr operator long double() const noexcept;
-    constexpr operator double() const noexcept;
-    constexpr operator float() const noexcept;
-    constexpr operator __int128() const noexcept;
-    constexpr operator unsigned __int128() const noexcept;
-
-    struct _impl;
-
-    base_type items[_impl::item_count];
+    constexpr integer(unsigned __int128 v) noexcept
+        : integer(v, typename detail::make_index_sequence<limbs>::type())
+    {
+    }
 
 private:
-    template <size_t Bits2, typename Signed2>
-    friend class integer;
+    template <typename T, size_t... I>
+    constexpr integer(T v, detail::index_sequence<I...>) noexcept
+        : data_{limb_from<T, I>(v)...}
+    {
+    }
 
-    friend class std::numeric_limits<integer<Bits, signed>>;
-    friend class std::numeric_limits<integer<Bits, unsigned>>;
-};
-
-template <typename T>
-[[nodiscard]] static constexpr bool ArithmeticConcept() noexcept;
-
-template <class T1, class T2>
-using _only_arithmetic = typename std::enable_if<ArithmeticConcept<T1>() && ArithmeticConcept<T2>()>::type;
-
-template <typename T>
-[[nodiscard]] static constexpr bool IntegralConcept() noexcept;
-
-template <class T, class T2>
-using _only_integer = typename std::enable_if<IntegralConcept<T>() && IntegralConcept<T2>()>::type;
-
-// Unary operators
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator~(const integer<Bits, Signed> & lhs) noexcept;
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator-(const integer<Bits, Signed> & lhs) noexcept(std::is_same_v<Signed, unsigned>);
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator+(const integer<Bits, Signed> & lhs) noexcept(std::is_same_v<Signed, unsigned>);
-
-// Binary operators
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator*(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator*(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator/(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator/(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator+(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator+(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator-(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator-(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator%(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Integral, typename Integral2, class = _only_integer<Integral, Integral2>>
-std::common_type_t<Integral, Integral2> constexpr operator%(const Integral & rhs, const Integral2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator&(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Integral, typename Integral2, class = _only_integer<Integral, Integral2>>
-std::common_type_t<Integral, Integral2> constexpr operator&(const Integral & rhs, const Integral2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator|(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Integral, typename Integral2, class = _only_integer<Integral, Integral2>>
-std::common_type_t<Integral, Integral2> constexpr operator|(const Integral & rhs, const Integral2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator^(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Integral, typename Integral2, class = _only_integer<Integral, Integral2>>
-std::common_type_t<Integral, Integral2> constexpr operator^(const Integral & rhs, const Integral2 & lhs);
-
-// TODO: Integral
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator<<(const integer<Bits, Signed> & lhs, int n) noexcept;
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator>>(const integer<Bits, Signed> & lhs, int n) noexcept;
-
-template <size_t Bits, typename Signed, typename Int, std::enable_if_t<!std::is_same_v<Int, int>, int> = 0>
-constexpr integer<Bits, Signed> operator<<(const integer<Bits, Signed> & lhs, Int n) noexcept
-{
-    return lhs << int(n);
-}
-template <size_t Bits, typename Signed, typename Int, std::enable_if_t<!std::is_same_v<Int, int>, int> = 0>
-constexpr integer<Bits, Signed> operator>>(const integer<Bits, Signed> & lhs, Int n) noexcept
-{
-    return lhs >> int(n);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator<(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator<(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator>(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator>(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator<=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator<=(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator>=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator>=(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator==(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator==(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator!=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs);
-template <typename Arithmetic, typename Arithmetic2, class = _only_arithmetic<Arithmetic, Arithmetic2>>
-constexpr bool operator!=(const Arithmetic & rhs, const Arithmetic2 & lhs);
-
-}
-
-namespace std
-{
-
-template <size_t Bits, typename Signed>
-struct hash<wide::integer<Bits, Signed>>;
-
-}
-
-// NOLINTEND(*)
-
-
-[[noreturn]] inline void throwError(const char * err)
-{
-    throw std::runtime_error(err);
-}
-
-
-// NOLINTBEGIN(*)
-
-/// Use same extended double for all platforms
-#if (LDBL_MANT_DIG == 64)
-#    define CONSTEXPR_FROM_DOUBLE constexpr
-using FromDoubleIntermediateType = long double;
-#else
-#    include <boost/math/special_functions/fpclassify.hpp>
-#    include <boost/multiprecision/cpp_bin_float.hpp>
-/// `wide_integer_from_builtin` can't be constexpr with non-literal `cpp_bin_float_double_extended`
-#    define CONSTEXPR_FROM_DOUBLE
-using FromDoubleIntermediateType = boost::multiprecision::cpp_bin_float_double_extended;
-#endif
-
-namespace CityHash_v1_0_2
-{
-struct uint128;
-}
-
-namespace wide
-{
-
-[[nodiscard]] constexpr bool supportsBitInt256() noexcept
-{
-#if defined(__clang__) && defined(__x86_64__)
-    return true;
-#else
-    return false;
-#endif
-}
-
-#if defined(__clang__) && defined(__x86_64__)
-/// TODO C23 standardized _BitInt(N). Theoretically, it is not necessary to restrict the platform to x86.
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wbit-int-extension"
-using BitInt256 = signed _BitInt(256);
-using BitUInt256 = unsigned _BitInt(256);
-#    pragma clang diagnostic pop
-
-struct Error
-{
-};
-
-template <typename Signed>
-struct ConstructBitInt256
-{
-    using Type = Error;
-};
-
-template <>
-struct ConstructBitInt256<signed>
-{
-    using Type = BitInt256;
-};
-
-template <>
-struct ConstructBitInt256<unsigned>
-{
-    using Type = BitUInt256;
-};
-
-/// Converts a 256-bit wide integer to Clang's built-in 256-bit integer representation.
-/// The source and target types have the same byte order.
-template <size_t Bits, typename Signed, std::enable_if_t<Bits == 256, int> = 0>
-constexpr const auto & toBitInt256(const wide::integer<Bits, Signed> & n)
-{
-    using T = ConstructBitInt256<Signed>::Type;
-    return *reinterpret_cast<const T *>(&n);
-}
-
-/// Converts a Clang's built-in 256-bit integer representation to a 256-bit wide integer.
-/// The source and target types have the same byte order.
-template <typename T, std::enable_if_t<std::is_same_v<T, BitInt256> || std::is_same_v<T, BitUInt256>, int> = 0>
-constexpr const auto & fromBitInt256(const T & n)
-{
-    using Signed = std::conditional_t<std::is_same_v<T, BitInt256>, signed, unsigned>;
-    return *reinterpret_cast<const wide::integer<256, Signed> *>(&n);
-}
-#endif
-
-template <typename T>
-struct IsWideInteger
-{
-    static constexpr bool value = false;
-};
-
-template <size_t Bits, typename Signed>
-struct IsWideInteger<wide::integer<Bits, Signed>>
-{
-    static constexpr bool value = true;
-};
-
-template <typename T>
-[[nodiscard]] static constexpr bool ArithmeticConcept() noexcept
-{
-    return std::is_arithmetic_v<T> || IsWideInteger<T>::value;
-}
-
-template <typename T>
-[[nodiscard]] static constexpr bool IntegralConcept() noexcept
-{
-    return std::is_integral_v<T> || IsWideInteger<T>::value;
-}
-
-template <typename T>
-class IsTupleLike
-{
-    template <typename U>
-    static auto check(U * p) -> decltype(std::tuple_size<U>::value, int());
-    template <typename>
-    static void check(...);
+    template <typename T, size_t I>
+    static constexpr limb_type limb_from(T v) noexcept
+    {
+        return I < (sizeof(T) * 8 + 63) / 64
+            ? static_cast<limb_type>((std::is_signed<T>::value ? static_cast<__int128>(v) : static_cast<unsigned __int128>(v)) >> (I * 64))
+            : (std::is_signed<T>::value && v < 0 ? ~0ULL : 0ULL);
+    }
 
 public:
-    static constexpr const bool value = !std::is_void_v<decltype(check<T>(nullptr))>;
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    integer(T v) noexcept
+    {
+        assign_float(v);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    integer & operator=(T v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    integer & operator=(__int128 v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    integer & operator=(unsigned __int128 v) noexcept
+    {
+        assign(v);
+        return *this;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    integer & operator=(T v) noexcept
+    {
+        assign_float(v);
+        return *this;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    operator T() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(T) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+
+        if (std::is_signed<T>::value)
+            return static_cast<T>(static_cast<__int128>(value));
+        else
+            return static_cast<T>(value);
+    }
+
+    operator __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(__int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return static_cast<__int128>(value);
+    }
+
+    operator unsigned __int128() const noexcept
+    {
+        unsigned __int128 value = 0;
+        for (size_t i = 0; i < limbs && i < (sizeof(unsigned __int128) + sizeof(limb_type) - 1) / sizeof(limb_type); ++i)
+            value |= static_cast<unsigned __int128>(data_[i]) << (i * 64);
+        return value;
+    }
+
+    explicit operator long double() const noexcept
+    {
+        if (is_zero())
+            return 0;
+        bool neg = std::is_same<Signed, signed>::value && (data_[limbs - 1] >> 63);
+        integer tmp = neg ? -*this : *this;
+        long double res = 0;
+        for (size_t i = limbs; i-- > 0;)
+        {
+            res *= std::ldexp(1.0L, 64);
+            res += static_cast<long double>(tmp.data_[i]);
+        }
+        return neg ? -res : res;
+    }
+
+    explicit operator double() const noexcept { return static_cast<double>(static_cast<long double>(*this)); }
+
+    explicit operator float() const noexcept { return static_cast<float>(static_cast<long double>(*this)); }
+
+    integer & operator+=(const integer & rhs) noexcept
+    {
+        detail::add_limbs<limbs>(data_, rhs.data_);
+        return *this;
+    }
+
+    integer & operator-=(const integer & rhs) noexcept
+    {
+        detail::sub_limbs<limbs>(data_, rhs.data_);
+        return *this;
+    }
+
+    integer & operator&=(const integer & rhs) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            data_[i] &= rhs.data_[i];
+        return *this;
+    }
+
+    integer & operator|=(const integer & rhs) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            data_[i] |= rhs.data_[i];
+        return *this;
+    }
+
+    integer & operator^=(const integer & rhs) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            data_[i] ^= rhs.data_[i];
+        return *this;
+    }
+
+    integer & operator*=(const integer & rhs) noexcept
+    {
+        *this = *this * rhs;
+        return *this;
+    }
+
+    integer & operator/=(const integer & rhs) noexcept
+    {
+        *this = *this / rhs;
+        return *this;
+    }
+
+    integer & operator%=(const integer & rhs) noexcept
+    {
+        *this = *this % rhs;
+        return *this;
+    }
+
+    integer & operator<<=(int n) noexcept
+    {
+        if (n <= 0)
+            return *this;
+        size_t limb_shift = static_cast<size_t>(n) / 64;
+        int bit_shift = n % 64;
+        if (limb_shift)
+        {
+            for (size_t i = limbs; i-- > limb_shift;)
+                data_[i] = data_[i - limb_shift];
+            for (size_t i = 0; i < limb_shift; ++i)
+                data_[i] = 0;
+        }
+        if (bit_shift)
+        {
+            for (size_t i = limbs; i-- > 0;)
+            {
+                unsigned __int128 part = static_cast<unsigned __int128>(data_[i]) << bit_shift;
+                if (i)
+                    part |= data_[i - 1] >> (64 - bit_shift);
+                data_[i] = static_cast<limb_type>(part);
+            }
+        }
+        return *this;
+    }
+
+    integer & operator>>=(int n) noexcept
+    {
+        if (n <= 0)
+            return *this;
+        size_t limb_shift = static_cast<size_t>(n) / 64;
+        int bit_shift = n % 64;
+        if (limb_shift)
+        {
+            for (size_t i = 0; i < limbs - limb_shift; ++i)
+                data_[i] = data_[i + limb_shift];
+            for (size_t i = limbs - limb_shift; i < limbs; ++i)
+                data_[i] = 0;
+        }
+        if (bit_shift)
+        {
+            for (size_t i = 0; i < limbs; ++i)
+            {
+                unsigned __int128 part = static_cast<unsigned __int128>(data_[i]) >> bit_shift;
+                if (i + 1 < limbs)
+                    part |= static_cast<unsigned __int128>(data_[i + 1]) << (64 - bit_shift);
+                data_[i] = static_cast<limb_type>(part);
+            }
+        }
+        return *this;
+    }
+
+    integer & operator++() noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            if (++data_[i])
+                break;
+        }
+        return *this;
+    }
+
+    integer operator++(int) noexcept
+    {
+        integer tmp = *this;
+        ++(*this);
+        return tmp;
+    }
+
+    integer & operator--() noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            limb_type old = data_[i];
+            --data_[i];
+            if (old)
+                break;
+        }
+        return *this;
+    }
+
+    integer operator--(int) noexcept
+    {
+        integer tmp = *this;
+        --(*this);
+        return tmp;
+    }
+
+    explicit operator bool() const noexcept { return !is_zero(); }
+
+    friend integer operator+(integer lhs, const integer & rhs) noexcept
+    {
+        lhs += rhs;
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator+(integer lhs, T rhs) noexcept
+    {
+        lhs += integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator+(T lhs, integer rhs) noexcept
+    {
+        rhs += integer(lhs);
+        return rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator+(integer lhs, T rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator+(T lhs, integer rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res += static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    friend integer operator-(integer lhs, const integer & rhs) noexcept
+    {
+        lhs -= rhs;
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator-(integer lhs, T rhs) noexcept
+    {
+        lhs -= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator-(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) - rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator-(integer lhs, T rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator-(T lhs, integer rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res -= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    friend integer operator&(integer lhs, const integer & rhs) noexcept
+    {
+        lhs &= rhs;
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator&(integer lhs, T rhs) noexcept
+    {
+        lhs &= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator&(T lhs, integer rhs) noexcept
+    {
+        rhs &= integer(lhs);
+        return rhs;
+    }
+
+    friend integer operator|(integer lhs, const integer & rhs) noexcept
+    {
+        lhs |= rhs;
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator|(integer lhs, T rhs) noexcept
+    {
+        lhs |= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator|(T lhs, integer rhs) noexcept
+    {
+        rhs |= integer(lhs);
+        return rhs;
+    }
+
+    friend integer operator^(integer lhs, const integer & rhs) noexcept
+    {
+        lhs ^= rhs;
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator^(integer lhs, T rhs) noexcept
+    {
+        lhs ^= integer(rhs);
+        return lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator^(T lhs, integer rhs) noexcept
+    {
+        rhs ^= integer(lhs);
+        return rhs;
+    }
+
+    friend integer operator<<(integer lhs, int n) noexcept
+    {
+        lhs <<= n;
+        return lhs;
+    }
+
+    friend integer operator>>(integer lhs, int n) noexcept
+    {
+        lhs >>= n;
+        return lhs;
+    }
+
+    friend integer operator*(const integer & lhs, const integer & rhs) noexcept
+    {
+        integer result{};
+        detail::mul_limbs<limbs>(result.data_, lhs.data_, rhs.data_);
+        return result;
+    }
+
+    friend integer operator*(integer lhs, limb_type rhs) noexcept
+    {
+        detail::mul_limb<limbs>(lhs.data_, rhs);
+        return lhs;
+    }
+
+    friend integer operator*(limb_type lhs, integer rhs) noexcept { return rhs * lhs; }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator*(integer lhs, T rhs) noexcept
+    {
+        return lhs * integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator*(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) * rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator*(integer lhs, T rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator*(T lhs, integer rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res *= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    friend integer operator/(integer lhs, const integer & rhs) noexcept
+    {
+        bool lhs_neg = false;
+        bool rhs_neg = false;
+        integer divisor = rhs;
+        if (std::is_same<Signed, signed>::value)
+        {
+            lhs_neg = lhs.data_[limbs - 1] >> 63;
+            rhs_neg = divisor.data_[limbs - 1] >> 63;
+            if (lhs_neg)
+                lhs = -lhs;
+            if (rhs_neg)
+                divisor = -divisor;
+        }
+        integer result;
+        size_t divisor_limbs = limbs;
+        while (divisor_limbs > 0 && divisor.data_[divisor_limbs - 1] == 0)
+            --divisor_limbs;
+        bool small_divisor = divisor_limbs == 1;
+        if (small_divisor)
+        {
+            // single-limb divisor: use fast division/remainder routine
+            lhs.div_mod_small(divisor.data_[0], result);
+        }
+        else
+        {
+            int pow_bit;
+            if (is_power_of_two(divisor, pow_bit))
+            {
+                // power-of-two divisor turns into a simple shift
+                result = lhs >> pow_bit;
+            }
+            else if (limbs == 2)
+            {
+                // both operands are 128-bit wide
+                unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                unsigned __int128 q = a / b;
+                result.data_[0] = static_cast<limb_type>(q);
+                result.data_[1] = static_cast<limb_type>(q >> 64);
+            }
+            else if (divisor_limbs <= 2)
+            {
+                size_t lhs_limbs = limbs;
+                while (lhs_limbs > 0 && lhs.data_[lhs_limbs - 1] == 0)
+                    --lhs_limbs;
+                if (lhs_limbs <= 2)
+                {
+                    // operands fit into two limbs; reuse the 128-bit path
+                    unsigned __int128 a = (static_cast<unsigned __int128>(lhs.data_[1]) << 64) | lhs.data_[0];
+                    unsigned __int128 b = (static_cast<unsigned __int128>(divisor.data_[1]) << 64) | divisor.data_[0];
+                    unsigned __int128 q = a / b;
+                    result.data_[0] = static_cast<limb_type>(q);
+                    result.data_[1] = static_cast<limb_type>(q >> 64);
+                }
+                else if (limbs <= 4)
+                {
+                    // small operand size: fall back to Knuth division
+                    result = div_large(lhs, divisor, divisor_limbs);
+                }
+                else
+                {
+                    // generic shift-subtract algorithm for very large numbers
+                    result = div_shift_subtract(lhs, divisor);
+                }
+            }
+            else if (limbs <= 4)
+            {
+                // up to 256-bit operands: Knuth division
+                result = div_large(lhs, divisor, divisor_limbs);
+            }
+            else
+            {
+                // generic shift-subtract algorithm
+                result = div_shift_subtract(lhs, divisor);
+            }
+        }
+        if (std::is_same<Signed, signed>::value && lhs_neg != rhs_neg)
+            result = -result;
+        return result;
+    }
+
+    friend integer operator/(integer lhs, limb_type rhs) noexcept
+    {
+        integer q;
+        lhs.div_mod_small(rhs, q);
+        return q;
+    }
+
+    friend integer operator/(limb_type lhs, integer rhs) noexcept { return integer(lhs) / rhs; }
+
+    friend integer operator%(integer lhs, const integer & rhs) noexcept
+    {
+        integer q = lhs / rhs;
+        q *= rhs;
+        lhs -= q;
+        return lhs;
+    }
+
+    friend integer operator%(integer lhs, limb_type rhs) noexcept
+    {
+        integer q;
+        limb_type r = lhs.div_mod_small(rhs, q);
+        return integer(r);
+    }
+
+    friend integer operator%(limb_type lhs, integer rhs) noexcept { return integer(lhs) % rhs; }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator/(integer lhs, T rhs) noexcept
+    {
+        if (sizeof(T) <= sizeof(limb_type))
+            return lhs / static_cast<limb_type>(rhs);
+        return lhs / integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator/(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) / rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator/(integer lhs, T rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator/(T lhs, integer rhs) noexcept
+    {
+        long double res = static_cast<long double>(lhs);
+        res /= static_cast<long double>(rhs);
+        return integer(res);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator%(integer lhs, T rhs) noexcept
+    {
+        if (sizeof(T) <= sizeof(limb_type))
+        {
+            integer q;
+            limb_type r = lhs.div_mod_small(static_cast<limb_type>(rhs), q);
+            return integer(r);
+        }
+        return lhs % integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend integer operator%(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) % rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator%(integer lhs, T rhs) noexcept
+    {
+        return lhs % integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend integer operator%(T lhs, integer rhs) noexcept
+    {
+        return integer(lhs) % rhs;
+    }
+
+    friend constexpr bool operator==(const integer & lhs, const integer & rhs) noexcept
+    {
+        return detail::limbs_equal<limbs - 1>::eval(lhs, rhs);
+    }
+
+    friend constexpr bool operator!=(const integer & lhs, const integer & rhs) noexcept { return !(lhs == rhs); }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend constexpr bool operator==(const integer & lhs, T rhs) noexcept
+    {
+        return lhs == integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend constexpr bool operator==(T lhs, const integer & rhs) noexcept
+    {
+        return integer(lhs) == rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend constexpr bool operator!=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend constexpr bool operator!=(T lhs, const integer & rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator==(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(lhs) == static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator==(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(lhs) == static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator!=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator!=(T lhs, const integer & rhs) noexcept
+    {
+        return !(lhs == rhs);
+    }
+
+    friend bool operator<(const integer & lhs, const integer & rhs) noexcept
+    {
+        if (std::is_same<Signed, signed>::value)
+        {
+            bool lhs_neg = lhs.data_[limbs - 1] >> 63;
+            bool rhs_neg = rhs.data_[limbs - 1] >> 63;
+            if (lhs_neg != rhs_neg)
+                return lhs_neg;
+        }
+        for (size_t i = limbs; i-- > 0;)
+        {
+            if (lhs.data_[i] != rhs.data_[i])
+                return lhs.data_[i] < rhs.data_[i];
+        }
+        return false;
+    }
+
+    friend bool operator>(const integer & lhs, const integer & rhs) noexcept { return rhs < lhs; }
+
+    friend bool operator<=(const integer & lhs, const integer & rhs) noexcept { return !(rhs < lhs); }
+
+    friend bool operator>=(const integer & lhs, const integer & rhs) noexcept { return !(lhs < rhs); }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<(const integer & lhs, T rhs) noexcept
+    {
+        return lhs < integer(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<(T lhs, const integer & rhs) noexcept
+    {
+        return integer(lhs) < rhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>(const integer & lhs, T rhs) noexcept
+    {
+        return integer(rhs) < lhs;
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>(T lhs, const integer & rhs) noexcept
+    {
+        return rhs < integer(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<=(const integer & lhs, T rhs) noexcept
+    {
+        return !(integer(rhs) < lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator<=(T lhs, const integer & rhs) noexcept
+    {
+        return !(rhs < integer(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>=(const integer & lhs, T rhs) noexcept
+    {
+        return !(lhs < integer(rhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_integral<T>::value, int>::type = 0>
+    friend bool operator>=(T lhs, const integer & rhs) noexcept
+    {
+        return !(integer(lhs) < rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(lhs) < static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(lhs) < static_cast<long double>(rhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>(const integer & lhs, T rhs) noexcept
+    {
+        return static_cast<long double>(rhs) < static_cast<long double>(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>(T lhs, const integer & rhs) noexcept
+    {
+        return static_cast<long double>(rhs) < static_cast<long double>(lhs);
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<=(const integer & lhs, T rhs) noexcept
+    {
+        return !(static_cast<long double>(rhs) < static_cast<long double>(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator<=(T lhs, const integer & rhs) noexcept
+    {
+        return !(static_cast<long double>(rhs) < static_cast<long double>(lhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>=(const integer & lhs, T rhs) noexcept
+    {
+        return !(static_cast<long double>(lhs) < static_cast<long double>(rhs));
+    }
+
+    template <typename T, typename std::enable_if<std::is_floating_point<T>::value, int>::type = 0>
+    friend bool operator>=(T lhs, const integer & rhs) noexcept
+    {
+        return !(static_cast<long double>(lhs) < static_cast<long double>(rhs));
+    }
+
+    friend integer operator~(integer v) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            v.data_[i] = ~v.data_[i];
+        return v;
+    }
+
+    friend integer operator-(const integer & v) noexcept
+    {
+        integer res = ~v;
+        limb_type carry = 1;
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            unsigned __int128 sum = static_cast<unsigned __int128>(res.data_[i]) + carry;
+            res.data_[i] = static_cast<limb_type>(sum);
+            carry = sum >> 64;
+            if (!carry)
+                break;
+        }
+        return res;
+    }
+
+    friend integer operator+(const integer & v) noexcept { return v; }
+
+    friend std::string to_string<>(const integer & v);
+
+private:
+    template <typename T>
+    void assign(T v) noexcept
+    {
+        using ST = typename std::conditional<std::is_signed<T>::value, __int128_t, unsigned __int128>::type;
+        ST val = static_cast<ST>(v);
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            data_[i] = static_cast<limb_type>(static_cast<unsigned __int128>(val));
+            if (std::is_signed<T>::value)
+                val >>= 64;
+            else
+                val = static_cast<unsigned __int128>(val) >> 64;
+        }
+        if (std::is_signed<T>::value && v < 0)
+        {
+            for (size_t i = (sizeof(T) * 8 + 63) / 64; i < limbs; ++i)
+                data_[i] = ~0ULL;
+        }
+    }
+
+    template <typename T>
+    void assign_float(T v) noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            data_[i] = 0;
+        if (v == 0)
+            return;
+        bool neg = v < 0;
+        if (neg)
+            v = -v;
+        long double val = static_cast<long double>(v);
+        long double intpart;
+        std::modf(val, &intpart);
+        val = intpart;
+        long double base = std::ldexp(1.0L, 64);
+        for (size_t i = 0; i < limbs && val > 0; ++i)
+        {
+            long double rem = std::fmod(val, base);
+            data_[i] = static_cast<limb_type>(rem);
+            val = std::floor(val / base);
+        }
+        if (neg)
+            *this = -*this;
+    }
+
+    bool is_zero() const noexcept
+    {
+        for (size_t i = 0; i < limbs; ++i)
+            if (data_[i] != 0)
+                return false;
+        return true;
+    }
+
+    int highest_bit() const noexcept
+    {
+        for (int i = static_cast<int>(limbs) - 1; i >= 0; --i)
+        {
+            if (data_[i])
+                return i * 64 + 63 - __builtin_clzll(data_[i]);
+        }
+        return -1;
+    }
+
+    limb_type div_mod_small(limb_type div, integer & quotient) const noexcept
+    {
+        quotient = integer();
+        size_t n = limbs;
+        while (n > 0 && data_[n - 1] == 0)
+            --n;
+        if (n == 0)
+            return 0;
+        if (n == 1)
+        {
+            quotient.data_[0] = static_cast<limb_type>(data_[0] / div);
+            return static_cast<limb_type>(data_[0] % div);
+        }
+        if (n == 2)
+        {
+            unsigned __int128 num = (static_cast<unsigned __int128>(data_[1]) << 64) | data_[0];
+            unsigned __int128 q = num / div;
+            quotient.data_[0] = static_cast<limb_type>(q);
+            quotient.data_[1] = static_cast<limb_type>(q >> 64);
+            return static_cast<limb_type>(num % div);
+        }
+        unsigned __int128 rem = 0;
+        for (size_t i = n; i-- > 0;)
+        {
+            rem = (rem << 64) | data_[i];
+            quotient.data_[i] = static_cast<limb_type>(rem / div);
+            rem %= div;
+        }
+        return static_cast<limb_type>(rem);
+    }
+
+    static bool is_power_of_two(const integer & v, int & bit_index) noexcept
+    {
+        bit_index = -1;
+        bool found = false;
+        for (size_t i = 0; i < limbs; ++i)
+        {
+            limb_type limb = v.data_[i];
+            if (limb)
+            {
+                if (limb & (limb - 1))
+                    return false;
+                if (found)
+                    return false;
+                bit_index = static_cast<int>(i * 64 + __builtin_ctzll(limb));
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    static integer div_shift_subtract(integer lhs, integer divisor) noexcept
+    {
+        integer result;
+        int shift = lhs.highest_bit() - divisor.highest_bit();
+        integer current(1);
+        if (shift > 0)
+        {
+            divisor <<= shift;
+            current <<= shift;
+        }
+        for (; shift >= 0; --shift)
+        {
+            if (!(lhs < divisor))
+            {
+                lhs -= divisor;
+                result |= current;
+            }
+            divisor >>= 1;
+            current >>= 1;
+        }
+        return result;
+    }
+
+    static integer div_large(integer lhs, const integer & divisor, size_t div_limbs) noexcept
+    {
+        integer quotient;
+        size_t n = limbs;
+        while (n > 0 && lhs.data_[n - 1] == 0)
+            --n;
+        if (n < div_limbs)
+            return quotient;
+
+        std::array<limb_type, limbs + 1> u = {};
+        std::array<limb_type, limbs> v = {};
+
+        int shift = __builtin_clzll(divisor.data_[div_limbs - 1]);
+        limb_type carry = 0;
+        for (size_t i = 0; i < n; ++i)
+        {
+            limb_type cur = lhs.data_[i];
+            u[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+        u[n] = carry;
+
+        carry = 0;
+        for (size_t i = 0; i < div_limbs; ++i)
+        {
+            limb_type cur = divisor.data_[i];
+            v[i] = (cur << shift) | carry;
+            carry = shift ? static_cast<limb_type>(cur >> (64 - shift)) : 0;
+        }
+
+        for (int j = static_cast<int>(n - div_limbs); j >= 0; --j)
+        {
+            unsigned __int128 numerator = (static_cast<unsigned __int128>(u[j + div_limbs]) << 64) | u[j + div_limbs - 1];
+            unsigned __int128 qhat = numerator / v[div_limbs - 1];
+            unsigned __int128 rhat = numerator % v[div_limbs - 1];
+
+            if (div_limbs > 1)
+            {
+                while (qhat == (static_cast<unsigned __int128>(1) << 64) || qhat * v[div_limbs - 2] > ((rhat << 64) | u[j + div_limbs - 2]))
+                {
+                    --qhat;
+                    rhat += v[div_limbs - 1];
+                    if (rhat >= (static_cast<unsigned __int128>(1) << 64))
+                        break;
+                }
+            }
+
+            unsigned __int128 borrow = 0;
+            for (size_t i = 0; i < div_limbs; ++i)
+            {
+                unsigned __int128 p = qhat * v[i] + borrow;
+                if (u[j + i] < static_cast<limb_type>(p))
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = (p >> 64) + 1;
+                }
+                else
+                {
+                    u[j + i] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + i]) - p);
+                    borrow = p >> 64;
+                }
+            }
+            if (u[j + div_limbs] < static_cast<limb_type>(borrow))
+            {
+                unsigned __int128 carry2 = 0;
+                for (size_t i = 0; i < div_limbs; ++i)
+                {
+                    unsigned __int128 t2 = static_cast<unsigned __int128>(u[j + i]) + v[i] + carry2;
+                    u[j + i] = static_cast<limb_type>(t2);
+                    carry2 = t2 >> 64;
+                }
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) + carry2);
+                --qhat;
+            }
+            else
+            {
+                u[j + div_limbs] = static_cast<limb_type>(static_cast<unsigned __int128>(u[j + div_limbs]) - borrow);
+            }
+            quotient.data_[j] = static_cast<limb_type>(qhat);
+        }
+        return quotient;
+    }
+
+    limb_type data_[limbs] = {};
 };
 
-}
+} // namespace wide
 
 namespace std
 {
-
-// numeric limits
 template <size_t Bits, typename Signed>
 class numeric_limits<wide::integer<Bits, Signed>>
 {
 public:
-    static constexpr bool is_specialized = true;
-    static constexpr bool is_signed = is_same_v<Signed, signed>;
-    static constexpr bool is_integer = true;
-    static constexpr bool is_exact = true;
-    static constexpr bool has_infinity = false;
-    static constexpr bool has_quiet_NaN = false;
-    static constexpr bool has_signaling_NaN = true;
-    static constexpr bool has_denorm_loss = false;
-    static constexpr std::float_round_style round_style = std::round_toward_zero;
-    static constexpr bool is_iec559 = false;
-    static constexpr bool is_bounded = true;
-    static constexpr bool is_modulo = true;
-    static constexpr int digits = Bits - (is_same_v<Signed, signed> ? 1 : 0);
-    static constexpr int digits10 = digits * 0.30103 /*std::log10(2)*/;
-    static constexpr int max_digits10 = 0;
-    static constexpr int radix = 2;
-    static constexpr int min_exponent = 0;
-    static constexpr int min_exponent10 = 0;
-    static constexpr int max_exponent = 0;
-    static constexpr int max_exponent10 = 0;
-    static constexpr bool traps = true;
-    static constexpr bool tinyness_before = false;
+    static const bool is_specialized = true;
+    static const bool is_signed = std::is_same<Signed, signed>::value;
+    static const bool is_integer = true;
+    static const bool is_exact = true;
+    static const bool has_infinity = false;
+    static const bool has_quiet_NaN = false;
+    static const bool has_signaling_NaN = true;
+    static const bool has_denorm_loss = false;
+    static const std::float_round_style round_style = std::round_toward_zero;
+    static const bool is_iec559 = false;
+    static const bool is_bounded = true;
+    static const bool is_modulo = true;
+    static const int digits = Bits - (is_signed ? 1 : 0);
+    static const int digits10 = digits * 30103 / 100000;
+    static const int max_digits10 = 0;
+    static const int radix = 2;
+    static const int min_exponent = 0;
+    static const int min_exponent10 = 0;
+    static const int max_exponent = 0;
+    static const int max_exponent10 = 0;
+    static const bool traps = true;
+    static const bool tinyness_before = false;
 
-    static constexpr wide::integer<Bits, Signed> min() noexcept
+    static wide::integer<Bits, Signed> min() noexcept
     {
-        if constexpr (is_same_v<Signed, signed>)
+        if (is_signed)
         {
-            using T = wide::integer<Bits, signed>;
-            T res{};
-            res.items[T::_impl::big(0)] = std::numeric_limits<typename wide::integer<Bits, Signed>::signed_base_type>::min();
+            typedef wide::integer<Bits, Signed> T;
+            T res;
+            res.data_[T::limbs - 1] = static_cast<typename T::limb_type>(1ULL << 63);
             return res;
         }
         return wide::integer<Bits, Signed>(0);
     }
 
-    static constexpr wide::integer<Bits, Signed> max() noexcept
+    static wide::integer<Bits, Signed> max() noexcept
     {
-        using T = wide::integer<Bits, Signed>;
-        T res{};
-        res.items[T::_impl::big(0)] = is_same_v<Signed, signed>
-            ? std::numeric_limits<typename wide::integer<Bits, Signed>::signed_base_type>::max()
-            : std::numeric_limits<typename wide::integer<Bits, Signed>::base_type>::max();
-        for (unsigned i = 1; i < wide::integer<Bits, Signed>::_impl::item_count; ++i)
-        {
-            res.items[T::_impl::big(i)] = std::numeric_limits<typename wide::integer<Bits, Signed>::base_type>::max();
-        }
+        if (is_signed)
+            return ~min();
+        typedef wide::integer<Bits, Signed> T;
+        T res;
+        for (size_t i = 0; i < T::limbs; ++i)
+            res.data_[i] = std::numeric_limits<typename T::limb_type>::max();
         return res;
     }
 
-    static constexpr wide::integer<Bits, Signed> lowest() noexcept { return min(); }
-    static constexpr wide::integer<Bits, Signed> epsilon() noexcept { return 0; }
-    static constexpr wide::integer<Bits, Signed> round_error() noexcept { return 0; }
-    static constexpr wide::integer<Bits, Signed> infinity() noexcept { return 0; }
-    static constexpr wide::integer<Bits, Signed> quiet_NaN() noexcept { return 0; }
-    static constexpr wide::integer<Bits, Signed> signaling_NaN() noexcept { return 0; }
-    static constexpr wide::integer<Bits, Signed> denorm_min() noexcept { return 0; }
+    static wide::integer<Bits, Signed> lowest() noexcept { return min(); }
+    static wide::integer<Bits, Signed> epsilon() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> round_error() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> infinity() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> quiet_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> signaling_NaN() noexcept { return wide::integer<Bits, Signed>(0); }
+    static wide::integer<Bits, Signed> denorm_min() noexcept { return wide::integer<Bits, Signed>(0); }
 };
-
-// type traits
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-struct common_type<wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>
-{
-    using type = std::conditional_t < Bits == Bits2,
-          wide::integer<Bits, std::conditional_t<(std::is_same_v<Signed, Signed2> && std::is_same_v<Signed2, signed>), signed, unsigned>>,
-          std::conditional_t<Bits2<Bits, wide::integer<Bits, Signed>, wide::integer<Bits2, Signed2>>>;
-};
-
-template <size_t Bits, typename Signed, typename Arithmetic>
-struct common_type<wide::integer<Bits, Signed>, Arithmetic>
-{
-    static_assert(wide::ArithmeticConcept<Arithmetic>());
-
-    using type = std::conditional_t < std::is_floating_point_v<Arithmetic>, Arithmetic,
-          std::conditional_t<
-              sizeof(Arithmetic) * 8 < Bits,
-              wide::integer<Bits, Signed>,
-              std::conditional_t<Bits<
-                  sizeof(Arithmetic) * 8,
-                  Arithmetic,
-                  std::conditional_t<
-                      Bits == sizeof(Arithmetic) * 8 && (std::is_same_v<Signed, signed> || std::is_signed_v<Arithmetic>),
-                      Arithmetic,
-                      wide::integer<Bits, Signed>>>>>;
-};
-
-template <typename Arithmetic, size_t Bits, typename Signed>
-struct common_type<Arithmetic, wide::integer<Bits, Signed>> : common_type<wide::integer<Bits, Signed>, Arithmetic>
-{
-};
-
-}
-
-#pragma clang attribute push(__attribute__((no_sanitize("undefined"))), apply_to = function)
-namespace wide
-{
-
-template <size_t Bits, typename Signed>
-struct integer<Bits, Signed>::_impl
-{
-    static constexpr size_t _bits = Bits;
-    static constexpr const unsigned byte_count = Bits / 8;
-    static constexpr const unsigned item_count = byte_count / sizeof(base_type);
-    static constexpr const unsigned base_bits = sizeof(base_type) * 8;
-
-    /// Use Clang's built-in 256-bit integer to improve performance if possible.
-    ///
-    /// Not implemented for 128 bit types because performance benefits are negligible as of 2025:
-    /// https://github.com/ClickHouse/ClickHouse/issues/70502
-    static constexpr bool use_BitInt256 = supportsBitInt256() && Bits == 256;
-
-    static_assert(Bits % base_bits == 0);
-
-    /// Simple iteration in both directions
-    static constexpr unsigned little(unsigned idx)
-    {
-        if constexpr (std::endian::native == std::endian::little)
-            return idx;
-        else
-            return item_count - 1 - idx;
-    }
-    static constexpr unsigned big(unsigned idx)
-    {
-        if constexpr (std::endian::native == std::endian::little)
-            return item_count - 1 - idx;
-        else
-            return idx;
-    }
-    static constexpr unsigned any(unsigned idx) { return idx; }
-
-    template <class T>
-    constexpr static bool is_negative(const T & n) noexcept
-    {
-        if constexpr (std::is_signed_v<T>)
-            return n < 0;
-        else
-            return false;
-    }
-
-    template <size_t B, class T>
-    constexpr static bool is_negative(const integer<B, T> & n) noexcept
-    {
-        if constexpr (std::is_same_v<T, signed>)
-            return static_cast<signed_base_type>(n.items[integer<B, T>::_impl::big(0)]) < 0;
-        else
-            return false;
-    }
-
-    template <typename T>
-    constexpr static auto make_positive(const T & n) noexcept
-    {
-        if constexpr (std::is_signed_v<T>)
-            return n < 0 ? -n : n;
-        else
-            return n;
-    }
-
-    template <size_t B, class S>
-    constexpr static integer<B, S> make_positive(const integer<B, S> & n) noexcept
-    {
-        return is_negative(n) ? integer<B, S>(operator_unary_minus(n)) : n;
-    }
-
-    template <typename T>
-    constexpr static auto to_Integral(T f) noexcept
-    {
-        /// NOTE: this can be called with DB::Decimal, and in this case, result
-        /// will be wrong
-        if constexpr (std::is_signed_v<T>)
-            return static_cast<int64_t>(f);
-        else
-            return static_cast<uint64_t>(f);
-    }
-
-    template <typename Integral>
-    constexpr static void wide_integer_from_builtin(integer<Bits, Signed> & self, Integral rhs) noexcept
-    {
-        if constexpr (sizeof(Integral) <= sizeof(base_type))
-        {
-            self.items[little(0)] = _impl::to_Integral(rhs);
-
-            if constexpr (std::is_signed_v<Integral>)
-            {
-                if (rhs < 0)
-                {
-                    for (unsigned i = 1; i < item_count; ++i)
-                        self.items[little(i)] = -1;
-                    return;
-                }
-            }
-
-            for (unsigned i = 1; i < item_count; ++i)
-                self.items[little(i)] = 0;
-        }
-        else
-        {
-            using Unsigned = std::make_unsigned_t<Integral>;
-            Unsigned value = static_cast<Unsigned>(rhs);
-            constexpr unsigned rhs_items = sizeof(Integral) / sizeof(base_type);
-            constexpr unsigned to_copy = rhs_items < item_count ? rhs_items : item_count;
-
-            for (unsigned i = 0; i < to_copy; ++i)
-                self.items[little(i)] = static_cast<base_type>(value >> (i * base_bits));
-
-            if constexpr (item_count > to_copy)
-            {
-                base_type fill = 0;
-                if constexpr (std::is_signed_v<Integral>)
-                    fill = rhs < 0 ? static_cast<base_type>(-1) : 0;
-                for (unsigned i = to_copy; i < item_count; ++i)
-                    self.items[little(i)] = fill;
-            }
-        }
-    }
-
-    template <typename TupleLike, size_t i = 0>
-    constexpr static void wide_integer_from_tuple_like(integer<Bits, Signed> & self, const TupleLike & tuple) noexcept
-    {
-        if constexpr (i < item_count)
-        {
-            if constexpr (i < std::tuple_size_v<TupleLike>)
-                self.items[i] = std::get<i>(tuple);
-            else
-                self.items[i] = 0;
-            wide_integer_from_tuple_like<TupleLike, i + 1>(self, tuple);
-        }
-    }
-
-    template <typename CityHashUInt128 = CityHash_v1_0_2::uint128>
-    constexpr static void wide_integer_from_cityhash_uint128(integer<Bits, Signed> & self, const CityHashUInt128 & value) noexcept
-    {
-        static_assert(sizeof(item_count) >= 2);
-
-        if constexpr (std::endian::native == std::endian::little)
-            wide_integer_from_tuple_like(self, std::make_pair(value.low64, value.high64));
-        else
-            wide_integer_from_tuple_like(self, std::make_pair(value.high64, value.low64));
-    }
-
-    /**
-     * N.B. t is constructed from double, so max(t) = max(double) ~ 2^310
-     * the recursive call happens when t / 2^64 > 2^64, so there won't be more than 5 of them.
-     *
-     * t = a1 * max_int + b1,   a1 > max_int, b1 < max_int
-     * a1 = a2 * max_int + b2,  a2 > max_int, b2 < max_int
-     * a_(n - 1) = a_n * max_int + b2, a_n <= max_int <- base case.
-     */
-    template <class T>
-    constexpr static void set_multiplier(integer<Bits, Signed> & self, T t) noexcept
-    {
-        constexpr uint64_t max_int = std::numeric_limits<uint64_t>::max();
-        static_assert(std::is_same_v<T, double> || std::is_same_v<T, FromDoubleIntermediateType>);
-        /// Implementation specific behaviour on overflow (if we don't check here, stack overflow will triggered in bigint_cast).
-#if (LDBL_MANT_DIG == 64)
-        if (!std::isfinite(t))
-        {
-            self = 0;
-            return;
-        }
-#else
-        if constexpr (std::is_same_v<T, double>)
-        {
-            if (!std::isfinite(t))
-            {
-                self = 0;
-                return;
-            }
-        }
-        else
-        {
-            if (!boost::math::isfinite(t))
-            {
-                self = 0;
-                return;
-            }
-        }
-#endif
-
-        const T alpha = t / static_cast<T>(max_int);
-
-        /** Here we have to use strict comparison.
-          * The max_int is 2^64 - 1.
-          * When cast to a floating point type, it will be rounded to the closest representable number,
-          * which is 2^64.
-          * But 2^64 is not representable in uint64_t,
-          * so the maximum representable number will be strictly less.
-          */
-        if (alpha < static_cast<T>(max_int))
-            self = static_cast<uint64_t>(alpha);
-        else // max(double) / 2^64 will surely contain less than 52 precision bits, so speed up computations.
-            set_multiplier<double>(self, static_cast<double>(alpha));
-
-        self *= max_int;
-        self += static_cast<uint64_t>(t - floor(alpha) * static_cast<T>(max_int)); // += b_i
-    }
-
-    CONSTEXPR_FROM_DOUBLE static void wide_integer_from_builtin(integer<Bits, Signed> & self, double rhs) noexcept
-    {
-        constexpr int64_t max_int = std::numeric_limits<int64_t>::max();
-        constexpr int64_t min_int = std::numeric_limits<int64_t>::lowest();
-
-        /// There are values in int64 that have more than 53 significant bits (in terms of double
-        /// representation). Such values, being promoted to double, are rounded up or down. If they are rounded up,
-        /// the result may not fit in 64 bits.
-        /// The example of such a number is 9.22337e+18.
-        /// As to_Integral does a static_cast to int64_t, it may result in UB.
-        /// The necessary check here is that FromDoubleIntermediateType has enough significant (mantissa) bits to store the
-        /// int64_t max value precisely.
-
-        if (rhs > static_cast<FromDoubleIntermediateType>(min_int) && rhs < static_cast<FromDoubleIntermediateType>(max_int))
-        {
-            self = static_cast<int64_t>(rhs);
-            return;
-        }
-
-        const FromDoubleIntermediateType rhs_long_double
-            = (static_cast<FromDoubleIntermediateType>(rhs) < 0) ? -static_cast<FromDoubleIntermediateType>(rhs) : rhs;
-
-        set_multiplier(self, rhs_long_double);
-
-        if (rhs < 0)
-            self = -self;
-    }
-
-    template <size_t Bits2, typename Signed2>
-    constexpr static void wide_integer_from_wide_integer(integer<Bits, Signed> & self, const integer<Bits2, Signed2> & rhs) noexcept
-    {
-        constexpr const unsigned min_bits = (Bits < Bits2) ? Bits : Bits2;
-        constexpr const unsigned to_copy = min_bits / base_bits;
-
-        for (unsigned i = 0; i < to_copy; ++i)
-            self.items[little(i)] = rhs.items[integer<Bits2, Signed2>::_impl::little(i)];
-
-        if constexpr (Bits > Bits2)
-        {
-            if constexpr (std::is_signed_v<Signed2>)
-            {
-                if (rhs < 0)
-                {
-                    for (unsigned i = to_copy; i < item_count; ++i)
-                        self.items[little(i)] = -1;
-                    return;
-                }
-            }
-
-            for (unsigned i = to_copy; i < item_count; ++i)
-                self.items[little(i)] = 0;
-        }
-    }
-
-    template <typename T>
-    constexpr static bool should_keep_size()
-    {
-        return sizeof(T) <= byte_count;
-    }
-
-    constexpr static integer<Bits, Signed> shift_left(const integer<Bits, Signed> & rhs, unsigned n) noexcept
-    {
-        integer<Bits, Signed> lhs;
-        unsigned items_shift = n / base_bits;
-
-        if (unsigned bit_shift = n % base_bits)
-        {
-            unsigned overflow_shift = base_bits - bit_shift;
-
-            lhs.items[big(0)] = rhs.items[big(items_shift)] << bit_shift;
-            for (unsigned i = 1; i < item_count - items_shift; ++i)
-            {
-                lhs.items[big(i - 1)] |= rhs.items[big(items_shift + i)] >> overflow_shift;
-                lhs.items[big(i)] = rhs.items[big(items_shift + i)] << bit_shift;
-            }
-        }
-        else
-        {
-            for (unsigned i = 0; i < item_count - items_shift; ++i)
-                lhs.items[big(i)] = rhs.items[big(items_shift + i)];
-        }
-
-        for (unsigned i = 0; i < items_shift; ++i)
-            lhs.items[little(i)] = 0;
-        return lhs;
-    }
-
-    constexpr static integer<Bits, Signed> shift_right(const integer<Bits, Signed> & rhs, unsigned n) noexcept
-    {
-        integer<Bits, Signed> lhs;
-        unsigned items_shift = n / base_bits;
-        unsigned bit_shift = n % base_bits;
-
-        if (bit_shift)
-        {
-            unsigned overflow_shift = base_bits - bit_shift;
-
-            lhs.items[little(0)] = rhs.items[little(items_shift)] >> bit_shift;
-            for (unsigned i = 1; i < item_count - items_shift; ++i)
-            {
-                lhs.items[little(i - 1)] |= rhs.items[little(items_shift + i)] << overflow_shift;
-                lhs.items[little(i)] = rhs.items[little(items_shift + i)] >> bit_shift;
-            }
-        }
-        else
-        {
-            for (unsigned i = 0; i < item_count - items_shift; ++i)
-                lhs.items[little(i)] = rhs.items[little(items_shift + i)];
-        }
-
-        if (is_negative(rhs))
-        {
-            if (bit_shift)
-                lhs.items[big(items_shift)] |= std::numeric_limits<base_type>::max() << (base_bits - bit_shift);
-
-            for (unsigned i = 0; i < items_shift; ++i)
-                lhs.items[big(i)] = std::numeric_limits<base_type>::max();
-        }
-        else
-        {
-            for (unsigned i = 0; i < items_shift; ++i)
-                lhs.items[big(i)] = 0;
-        }
-
-        return lhs;
-    }
-
-private:
-    template <typename T>
-    constexpr static base_type get_item(const T & x, unsigned idx)
-    {
-        if constexpr (IsWideInteger<T>::value)
-        {
-            if (idx < T::_impl::item_count)
-                return x.items[idx];
-            return 0;
-        }
-        else
-        {
-            if constexpr (sizeof(T) <= sizeof(base_type))
-            {
-                if (little(0) == idx)
-                    return static_cast<base_type>(x);
-            }
-            else if (idx * sizeof(base_type) < sizeof(T))
-                return x >> (idx * base_bits); // & std::numeric_limits<base_type>::max()
-            return 0;
-        }
-    }
-
-    template <typename T>
-    constexpr static integer<Bits, Signed> minus(const integer<Bits, Signed> & lhs, T rhs)
-    {
-        constexpr const unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
-        constexpr const unsigned op_items = (item_count < rhs_items) ? item_count : rhs_items;
-
-        integer<Bits, Signed> res(lhs);
-        bool underflows[item_count] = {};
-
-        for (unsigned i = 0; i < op_items; ++i)
-        {
-            base_type rhs_item = get_item(rhs, little(i));
-            base_type & res_item = res.items[little(i)];
-
-            underflows[i] = res_item < rhs_item;
-            res_item -= rhs_item;
-        }
-
-        for (unsigned i = 1; i < item_count; ++i)
-        {
-            if (underflows[i - 1])
-            {
-                base_type & res_item = res.items[little(i)];
-                if (res_item == 0)
-                    underflows[i] = true;
-                --res_item;
-            }
-        }
-
-        return res;
-    }
-
-    template <typename T>
-    constexpr static integer<Bits, Signed> plus(const integer<Bits, Signed> & lhs, T rhs)
-    {
-        constexpr const unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
-        constexpr const unsigned op_items = (item_count < rhs_items) ? item_count : rhs_items;
-
-        integer<Bits, Signed> res(lhs);
-        bool overflows[item_count] = {};
-
-        for (unsigned i = 0; i < op_items; ++i)
-        {
-            base_type rhs_item = get_item(rhs, little(i));
-            base_type & res_item = res.items[little(i)];
-
-            res_item += rhs_item;
-            overflows[i] = res_item < rhs_item;
-        }
-
-        for (unsigned i = 1; i < item_count; ++i)
-        {
-            if (overflows[i - 1])
-            {
-                base_type & res_item = res.items[little(i)];
-                ++res_item;
-                if (res_item == 0)
-                    overflows[i] = true;
-            }
-        }
-
-        return res;
-    }
-
-    template <typename T>
-    constexpr static integer<Bits, Signed> multiply(const integer<Bits, Signed> & lhs, const T & rhs)
-    {
-        if constexpr (Bits == 256 && sizeof(base_type) == 8)
-        {
-            /// @sa https://github.com/abseil/abseil-cpp/blob/master/absl/numeric/int128.h
-            using HalfType = unsigned __int128;
-
-            HalfType a01 = (HalfType(lhs.items[little(1)]) << 64) + lhs.items[little(0)];
-            HalfType a23 = (HalfType(lhs.items[little(3)]) << 64) + lhs.items[little(2)];
-            HalfType a0 = lhs.items[little(0)];
-            HalfType a1 = lhs.items[little(1)];
-
-            HalfType b01 = rhs;
-            uint64_t b0 = b01;
-            uint64_t b1 = 0;
-            HalfType b23 = 0;
-            if constexpr (sizeof(T) > 8)
-                b1 = b01 >> 64;
-            if constexpr (sizeof(T) > 16)
-                b23 = (HalfType(rhs.items[little(3)]) << 64) + rhs.items[little(2)];
-
-            HalfType r23 = a23 * b01 + a01 * b23 + a1 * b1;
-            HalfType r01 = a0 * b0;
-            HalfType r12 = (r01 >> 64) + (r23 << 64);
-            HalfType r12_x = a1 * b0;
-
-            integer<Bits, Signed> res;
-            res.items[little(0)] = r01;
-            res.items[little(3)] = r23 >> 64;
-
-            if constexpr (sizeof(T) > 8)
-            {
-                HalfType r12_y = a0 * b1;
-                r12_x += r12_y;
-                if (r12_x < r12_y)
-                    ++res.items[little(3)];
-            }
-
-            r12 += r12_x;
-            if (r12 < r12_x)
-                ++res.items[little(3)];
-
-            res.items[little(1)] = r12;
-            res.items[little(2)] = r12 >> 64;
-            return res;
-        }
-        else if constexpr (Bits == 128 && sizeof(base_type) == 8)
-        {
-            using CompilerUInt128 = unsigned __int128;
-            CompilerUInt128 a = (CompilerUInt128(lhs.items[little(1)]) << 64)
-                + lhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 b = (CompilerUInt128(rhs.items[little(1)]) << 64)
-                + rhs.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 c = a * b;
-            integer<Bits, Signed> res;
-            res.items[little(0)] = c;
-            res.items[little(1)] = c >> 64;
-            return res;
-        }
-        else
-        {
-            integer<Bits, Signed> res{};
-            constexpr unsigned rhs_items = (sizeof(T) > sizeof(base_type)) ? (sizeof(T) / sizeof(base_type)) : 1;
-            for (unsigned i = 0; i < item_count; ++i)
-            {
-                base_type lhs_item = lhs.items[little(i)];
-                if (!lhs_item)
-                    continue;
-
-                unsigned __int128 carry = 0;
-                for (unsigned j = 0; j < rhs_items && i + j < item_count; ++j)
-                {
-                    unsigned __int128 cur
-                        = static_cast<unsigned __int128>(lhs_item) * get_item(rhs, little(j)) + res.items[little(i + j)] + carry;
-                    res.items[little(i + j)] = static_cast<base_type>(cur);
-                    carry = cur >> base_bits;
-                }
-
-                unsigned pos = i + rhs_items;
-                while (carry && pos < item_count)
-                {
-                    unsigned __int128 cur = static_cast<unsigned __int128>(res.items[little(pos)]) + carry;
-                    res.items[little(pos)] = static_cast<base_type>(cur);
-                    carry = cur >> base_bits;
-                    ++pos;
-                }
-            }
-
-            return res;
-        }
-    }
-
-public:
-    constexpr static integer<Bits, Signed> operator_unary_tilda(const integer<Bits, Signed> & lhs) noexcept
-    {
-        integer<Bits, Signed> res;
-
-        for (unsigned i = 0; i < item_count; ++i)
-            res.items[any(i)] = ~lhs.items[any(i)];
-        return res;
-    }
-
-    constexpr static integer<Bits, Signed>
-    operator_unary_minus(const integer<Bits, Signed> & lhs) noexcept(std::is_same_v<Signed, unsigned>)
-    {
-        return plus(operator_unary_tilda(lhs), 1);
-    }
-
-    template <typename T>
-    constexpr static auto operator_plus(const integer<Bits, Signed> & lhs, const T & rhs) noexcept(std::is_same_v<Signed, unsigned>)
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if constexpr (use_BitInt256)
-            {
-                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
-                {
-                    auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
-                    return fromBitInt256(toBitInt256(lhs) + toBitInt256(new_rhs));
-                }
-                else
-                    return fromBitInt256(toBitInt256(lhs) + toBitInt256(rhs));
-            }
-            else
-            {
-                if (is_negative(rhs))
-                    return minus(lhs, -rhs);
-                else
-                    return plus(lhs, rhs);
-            }
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, integer<T::_impl::_bits, Signed>>::_impl::operator_plus(
-                integer<T::_impl::_bits, Signed>(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static auto operator_minus(const integer<Bits, Signed> & lhs, const T & rhs) noexcept(std::is_same_v<Signed, unsigned>)
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if constexpr (use_BitInt256)
-            {
-                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
-                {
-                    auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
-                    return fromBitInt256(toBitInt256(lhs) - toBitInt256(new_rhs));
-                }
-                else
-                    return fromBitInt256(toBitInt256(lhs) - toBitInt256(rhs));
-            }
-            else
-            {
-                if (is_negative(rhs))
-                    return plus(lhs, -rhs);
-                else
-                    return minus(lhs, rhs);
-            }
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, integer<T::_impl::_bits, Signed>>::_impl::operator_minus(
-                integer<T::_impl::_bits, Signed>(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static auto operator_star(const integer<Bits, Signed> & lhs, const T & rhs)
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if constexpr (use_BitInt256)
-            {
-                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
-                {
-                    auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
-                    return fromBitInt256(toBitInt256(lhs) * toBitInt256(new_rhs));
-                }
-                else
-                    return fromBitInt256(toBitInt256(lhs) * toBitInt256(rhs));
-            }
-            else
-            {
-                integer<Bits, Signed> res;
-
-                if constexpr (std::is_signed_v<Signed>)
-                {
-                    res = multiply((is_negative(lhs) ? make_positive(lhs) : lhs), (is_negative(rhs) ? make_positive(rhs) : rhs));
-                }
-                else
-                {
-                    res = multiply(lhs, (is_negative(rhs) ? make_positive(rhs) : rhs));
-                }
-
-                if (std::is_same_v<Signed, signed> && is_negative(lhs) != is_negative(rhs))
-                    res = operator_unary_minus(res);
-
-                return res;
-            }
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_star(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static bool operator_greater(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if (std::numeric_limits<T>::is_signed && (is_negative(lhs) != is_negative(rhs)))
-                return is_negative(rhs);
-
-            integer<Bits, Signed> t = rhs;
-            for (unsigned i = 0; i < item_count; ++i)
-            {
-                base_type rhs_item = get_item(t, big(i));
-
-                if (lhs.items[big(i)] != rhs_item)
-                    return lhs.items[big(i)] > rhs_item;
-            }
-
-            return false;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_greater(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static bool operator_less(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if (std::numeric_limits<T>::is_signed && (is_negative(lhs) != is_negative(rhs)))
-                return is_negative(lhs);
-
-            integer<Bits, Signed> t = rhs;
-            for (unsigned i = 0; i < item_count; ++i)
-            {
-                base_type rhs_item = get_item(t, big(i));
-
-                if (lhs.items[big(i)] != rhs_item)
-                    return lhs.items[big(i)] < rhs_item;
-            }
-
-            return false;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_less(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static bool operator_eq(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            integer<Bits, Signed> t = rhs;
-            for (unsigned i = 0; i < item_count; ++i)
-            {
-                base_type rhs_item = get_item(t, any(i));
-
-                if (lhs.items[any(i)] != rhs_item)
-                    return false;
-            }
-
-            return true;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_eq(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static auto operator_pipe(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            integer<Bits, Signed> res;
-
-            for (unsigned i = 0; i < item_count; ++i)
-                res.items[little(i)] = lhs.items[little(i)] | get_item(rhs, little(i));
-            return res;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_pipe(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static auto operator_amp(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            integer<Bits, Signed> res;
-
-            for (unsigned i = 0; i < item_count; ++i)
-                res.items[little(i)] = lhs.items[little(i)] & get_item(rhs, little(i));
-            return res;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, T>::_impl::operator_amp(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static bool is_zero(const T & x)
-    {
-        bool is_zero = true;
-        for (auto item : x.items)
-        {
-            if (item != 0)
-            {
-                is_zero = false;
-                break;
-            }
-        }
-        return is_zero;
-    }
-
-    /// returns quotient as result and remainder in numerator.
-    template <size_t Bits2>
-    constexpr static integer<Bits2, unsigned> divide(integer<Bits2, unsigned> & numerator, integer<Bits2, unsigned> denominator)
-    {
-        static_assert(std::is_unsigned_v<Signed>);
-
-        if (is_zero(denominator))
-            throwError("Division by zero");
-
-        if constexpr (Bits == 128 && sizeof(base_type) == 8)
-        {
-            using CompilerUInt128 = unsigned __int128;
-
-            CompilerUInt128 a = (CompilerUInt128(numerator.items[little(1)]) << 64)
-                + numerator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 b = (CompilerUInt128(denominator.items[little(1)]) << 64)
-                + denominator.items[little(0)]; // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-            CompilerUInt128 c = a / b; // NOLINT
-
-            integer<Bits, Signed> res;
-            res.items[little(0)] = c;
-            res.items[little(1)] = c >> 64;
-
-            CompilerUInt128 remainder = a - b * c;
-            numerator.items[little(0)] = remainder;
-            numerator.items[little(1)] = remainder >> 64;
-
-            return res;
-        }
-
-        integer<Bits2, unsigned> x = 1;
-        integer<Bits2, unsigned> quotient = 0;
-
-        while (!operator_greater(denominator, numerator) && is_zero(operator_amp(shift_right(denominator, Bits2 - 1), 1)))
-        {
-            x = shift_left(x, 1);
-            denominator = shift_left(denominator, 1);
-        }
-
-        while (!is_zero(x))
-        {
-            if (!operator_greater(denominator, numerator))
-            {
-                numerator = operator_minus(numerator, denominator);
-                quotient = operator_pipe(quotient, x);
-            }
-
-            x = shift_right(x, 1);
-            denominator = shift_right(denominator, 1);
-        }
-
-        return quotient;
-    }
-
-    constexpr static base_type div_mod_small(integer<Bits, unsigned> & value, base_type div) noexcept
-    {
-        unsigned __int128 rem = 0;
-        for (unsigned i = 0; i < item_count; ++i)
-        {
-            unsigned idx = big(i);
-            unsigned __int128 cur = (rem << base_bits) + value.items[idx];
-            value.items[idx] = static_cast<base_type>(cur / div);
-            rem = cur % div;
-        }
-        return static_cast<base_type>(rem);
-    }
-
-    template <typename T>
-    constexpr static auto operator_slash(const integer<Bits, Signed> & lhs, const T & rhs)
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if constexpr (use_BitInt256)
-            {
-                if constexpr (!std::is_same_v<T, integer<Bits, Signed>>)
-                {
-                    auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
-                    return fromBitInt256(toBitInt256(lhs) / toBitInt256(new_rhs));
-                }
-                else
-                    return fromBitInt256(toBitInt256(lhs) / toBitInt256(rhs));
-            }
-            else
-            {
-                integer<Bits, unsigned> numerator = make_positive(lhs);
-                integer<Bits, unsigned> denominator = make_positive(integer<Bits, Signed>(rhs));
-
-                if (is_zero(denominator))
-                    throwError("Division by zero");
-
-                bool small_divisor = true;
-                for (size_t i = 1; i < item_count; ++i)
-                {
-                    if (denominator.items[little(i)] != 0)
-                    {
-                        small_divisor = false;
-                        break;
-                    }
-                }
-                if constexpr (Bits == 128 && sizeof(base_type) == 8)
-                    small_divisor = false;
-
-                integer<Bits, unsigned> quotient = numerator;
-                if (small_divisor)
-                    integer<Bits, unsigned>::_impl::div_mod_small(quotient, denominator.items[little(0)]);
-                else
-                    quotient = integer<Bits, unsigned>::_impl::divide(quotient, std::move(denominator));
-
-                if (std::is_same_v<Signed, signed> && is_negative(rhs) != is_negative(lhs))
-                    quotient = operator_unary_minus(quotient);
-                return quotient;
-            }
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, integer<T::_impl::_bits, Signed>>::operator_slash(T(lhs), rhs);
-        }
-    }
-
-    template <typename T>
-    constexpr static auto operator_percent(const integer<Bits, Signed> & lhs, const T & rhs)
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            if constexpr (use_BitInt256)
-            {
-                if constexpr (!std::is_same_v<T, integer<Bits, signed>>)
-                {
-                    auto new_rhs = static_cast<integer<Bits, Signed>>(rhs);
-                    return fromBitInt256(toBitInt256(lhs) % toBitInt256(new_rhs));
-                }
-                else
-                    return fromBitInt256(toBitInt256(lhs) % toBitInt256(rhs));
-            }
-            else
-            {
-                integer<Bits, unsigned> numerator = make_positive(lhs);
-                integer<Bits, unsigned> denominator = make_positive(integer<Bits, Signed>(rhs));
-
-                if (is_zero(denominator))
-                    throwError("Division by zero");
-
-                bool small_divisor = true;
-                for (size_t i = 1; i < item_count; ++i)
-                {
-                    if (denominator.items[little(i)] != 0)
-                    {
-                        small_divisor = false;
-                        break;
-                    }
-                }
-                if constexpr (Bits == 128 && sizeof(base_type) == 8)
-                    small_divisor = false;
-
-                integer<Bits, unsigned> result;
-                if (small_divisor)
-                {
-                    auto rem = integer<Bits, unsigned>::_impl::div_mod_small(numerator, denominator.items[little(0)]);
-                    result = integer<Bits, unsigned>(rem);
-                }
-                else
-                {
-                    integer<Bits, unsigned>::_impl::divide(numerator, std::move(denominator));
-                    result = numerator;
-                }
-
-                if (std::is_same_v<Signed, signed> && is_negative(lhs))
-                    result = operator_unary_minus(result);
-                return result;
-            }
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return std::common_type_t<integer<Bits, Signed>, integer<T::_impl::_bits, Signed>>::operator_percent(T(lhs), rhs);
-        }
-    }
-
-    // ^
-    template <typename T>
-    constexpr static auto operator_circumflex(const integer<Bits, Signed> & lhs, const T & rhs) noexcept
-    {
-        if constexpr (should_keep_size<T>())
-        {
-            integer<Bits, Signed> t(rhs);
-            integer<Bits, Signed> res = lhs;
-
-            for (unsigned i = 0; i < item_count; ++i)
-                res.items[any(i)] ^= t.items[any(i)];
-            return res;
-        }
-        else
-        {
-            static_assert(IsWideInteger<T>::value);
-            return T::operator_circumflex(T(lhs), rhs);
-        }
-    }
-
-    constexpr static integer<Bits, Signed> from_str(const char * c)
-    {
-        integer<Bits, Signed> res = 0;
-
-        bool is_neg = std::is_same_v<Signed, signed> && *c == '-';
-        if (is_neg)
-            ++c;
-
-        if (*c == '0' && (*(c + 1) == 'x' || *(c + 1) == 'X'))
-        { // hex
-            ++c;
-            ++c;
-            while (*c)
-            {
-                if (*c >= '0' && *c <= '9')
-                {
-                    res = multiply(res, 16U);
-                    res = plus(res, *c - '0');
-                    ++c;
-                }
-                else if (*c >= 'a' && *c <= 'f')
-                {
-                    res = multiply(res, 16U);
-                    res = plus(res, *c - 'a' + 10U);
-                    ++c;
-                }
-                else if (*c >= 'A' && *c <= 'F')
-                { // tolower must be used, but it is not constexpr
-                    res = multiply(res, 16U);
-                    res = plus(res, *c - 'A' + 10U);
-                    ++c;
-                }
-                else
-                    throwError("Invalid char from");
-            }
-        }
-        else
-        { // dec
-            while (*c)
-            {
-                if (*c < '0' || *c > '9')
-                    throwError("Invalid char from");
-
-                res = multiply(res, 10U);
-                res = plus(res, *c - '0');
-                ++c;
-            }
-        }
-
-        if (is_neg)
-            res = operator_unary_minus(res);
-
-        return res;
-    }
-};
-
-// Members
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed>::integer(T rhs) noexcept
-    : items{}
-{
-    if constexpr (IsWideInteger<T>::value)
-        _impl::wide_integer_from_wide_integer(*this, rhs);
-    else if constexpr (IsTupleLike<T>::value)
-        _impl::wide_integer_from_tuple_like(*this, rhs);
-    else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
-        _impl::wide_integer_from_cityhash_uint128(*this, rhs);
-    else
-        _impl::wide_integer_from_builtin(*this, rhs);
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed>::integer(std::initializer_list<T> il) noexcept
-    : items{}
-{
-    if (il.size() == 1)
-    {
-        if constexpr (IsWideInteger<T>::value)
-            _impl::wide_integer_from_wide_integer(*this, *il.begin());
-        else if constexpr (IsTupleLike<T>::value)
-            _impl::wide_integer_from_tuple_like(*this, *il.begin());
-        else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
-            _impl::wide_integer_from_cityhash_uint128(*this, *il.begin());
-        else
-            _impl::wide_integer_from_builtin(*this, *il.begin());
-    }
-    else if (il.size() == 0)
-    {
-        _impl::wide_integer_from_builtin(*this, 0);
-    }
-    else
-    {
-        auto it = il.begin();
-        for (unsigned i = 0; i < _impl::item_count; ++i)
-        {
-            if (it < il.end())
-            {
-                items[_impl::little(i)] = *it;
-                ++it;
-            }
-            else
-                items[_impl::little(i)] = 0;
-        }
-    }
-}
-
-template <size_t Bits, typename Signed>
-template <size_t Bits2, typename Signed2>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator=(const integer<Bits2, Signed2> & rhs) noexcept
-{
-    _impl::wide_integer_from_wide_integer(*this, rhs);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator=(T rhs) noexcept
-{
-    if constexpr (IsTupleLike<T>::value)
-        _impl::wide_integer_from_tuple_like(*this, rhs);
-    else if constexpr (std::is_same_v<std::remove_cvref_t<T>, CityHash_v1_0_2::uint128>)
-        _impl::wide_integer_from_cityhash_uint128(*this, rhs);
-    else
-        _impl::wide_integer_from_builtin(*this, rhs);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator*=(const T & rhs)
-{
-    *this = *this * rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator/=(const T & rhs)
-{
-    *this = *this / rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator+=(const T & rhs) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    *this = *this + rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator-=(const T & rhs) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    *this = *this - rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator%=(const T & rhs)
-{
-    *this = *this % rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator&=(const T & rhs) noexcept
-{
-    *this = *this & rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator|=(const T & rhs) noexcept
-{
-    *this = *this | rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-template <typename T>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator^=(const T & rhs) noexcept
-{
-    *this = *this ^ rhs;
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator<<=(int n) noexcept
-{
-    if (static_cast<size_t>(n) >= Bits)
-        *this = 0;
-    else if (n > 0)
-        *this = _impl::shift_left(*this, n);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator>>=(int n) noexcept
-{
-    if (static_cast<size_t>(n) >= Bits)
-    {
-        if (_impl::is_negative(*this))
-            *this = -1;
-        else
-            *this = 0;
-    }
-    else if (n > 0)
-        *this = _impl::shift_right(*this, n);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator++() noexcept(std::is_same_v<Signed, unsigned>)
-{
-    *this = _impl::operator_plus(*this, 1);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> integer<Bits, Signed>::operator++(int) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    auto tmp = *this;
-    *this = _impl::operator_plus(*this, 1);
-    return tmp;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> & integer<Bits, Signed>::operator--() noexcept(std::is_same_v<Signed, unsigned>)
-{
-    *this = _impl::operator_minus(*this, 1);
-    return *this;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> integer<Bits, Signed>::operator--(int) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    auto tmp = *this;
-    *this = _impl::operator_minus(*this, 1);
-    return tmp;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator bool() const noexcept
-{
-    return !_impl::operator_eq(*this, 0);
-}
-
-template <size_t Bits, typename Signed>
-template <class T, std::enable_if_t<std::is_arithmetic_v<T>, int>>
-constexpr integer<Bits, Signed>::operator T() const noexcept
-{
-    static_assert(std::numeric_limits<T>::is_integer);
-
-    /// NOTE: memcpy will suffice, but unfortunately, this function is constexpr.
-
-    using UnsignedT = std::make_unsigned_t<T>;
-
-    UnsignedT res{};
-    for (unsigned i = 0; i < _impl::item_count && i < (sizeof(T) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
-        res += UnsignedT(items[_impl::little(i)])
-            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-
-    return res;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator long double() const noexcept
-{
-    if (_impl::operator_eq(*this, 0))
-        return 0;
-
-    integer<Bits, Signed> tmp = *this;
-    if (_impl::is_negative(*this))
-        tmp = -tmp;
-
-    long double res = 0;
-    for (unsigned i = 0; i < _impl::item_count; ++i)
-    {
-        long double t = res;
-        res *= static_cast<long double>(std::numeric_limits<base_type>::max());
-        res += t;
-        res += tmp.items[_impl::big(i)];
-    }
-
-    if (_impl::is_negative(*this))
-        res = -res;
-
-    return res;
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator double() const noexcept
-{
-    return static_cast<double>(static_cast<long double>(*this));
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator float() const noexcept
-{
-    return static_cast<float>(static_cast<long double>(*this));
-}
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator __int128() const noexcept
-{
-    unsigned __int128 res{};
-    for (unsigned i = 0; i < _impl::item_count && i < (sizeof(__int128) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
-        res += static_cast<unsigned __int128>(items[_impl::little(i)])
-            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-    return static_cast<__int128>(res);
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed>::operator unsigned __int128() const noexcept
-{
-    unsigned __int128 res{};
-    for (unsigned i = 0; i < _impl::item_count && i < (sizeof(unsigned __int128) + sizeof(base_type) - 1) / sizeof(base_type); ++i)
-        res += static_cast<unsigned __int128>(items[_impl::little(i)])
-            << (sizeof(base_type) * 8 * i); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-    return res;
-}
-
-// Unary operators
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator~(const integer<Bits, Signed> & lhs) noexcept
-{
-    return integer<Bits, Signed>::_impl::operator_unary_tilda(lhs);
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator-(const integer<Bits, Signed> & lhs) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    return integer<Bits, Signed>::_impl::operator_unary_minus(lhs);
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator+(const integer<Bits, Signed> & lhs) noexcept(std::is_same_v<Signed, unsigned>)
-{
-    return lhs;
-}
-
-#define CT(x) \
-    std::common_type_t<std::decay_t<decltype(rhs)>, std::decay_t<decltype(lhs)>> \
-    { \
-        x \
-    }
-
-// Binary operators
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator*(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_star(lhs, rhs);
-}
-
-template <typename Arithmetic, typename Arithmetic2, class>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator*(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) * CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator/(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_slash(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator/(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) / CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator+(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_plus(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator+(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) + CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator-(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_minus(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-std::common_type_t<Arithmetic, Arithmetic2> constexpr operator-(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) - CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator%(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_percent(lhs, rhs);
-}
-template <typename Integral, typename Integral2, class>
-std::common_type_t<Integral, Integral2> constexpr operator%(const Integral & lhs, const Integral2 & rhs)
-{
-    return CT(lhs) % CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator&(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_amp(lhs, rhs);
-}
-template <typename Integral, typename Integral2, class>
-std::common_type_t<Integral, Integral2> constexpr operator&(const Integral & lhs, const Integral2 & rhs)
-{
-    return CT(lhs) & CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator|(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_pipe(lhs, rhs);
-}
-template <typename Integral, typename Integral2, class>
-std::common_type_t<Integral, Integral2> constexpr operator|(const Integral & lhs, const Integral2 & rhs)
-{
-    return CT(lhs) | CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>> constexpr
-operator^(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_circumflex(lhs, rhs);
-}
-template <typename Integral, typename Integral2, class>
-std::common_type_t<Integral, Integral2> constexpr operator^(const Integral & lhs, const Integral2 & rhs)
-{
-    return CT(lhs) ^ CT(rhs);
-}
-
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator<<(const integer<Bits, Signed> & lhs, int n) noexcept
-{
-    if (static_cast<size_t>(n) >= Bits)
-        return integer<Bits, Signed>(0);
-    if (n <= 0)
-        return lhs;
-    return integer<Bits, Signed>::_impl::shift_left(lhs, n);
-}
-template <size_t Bits, typename Signed>
-constexpr integer<Bits, Signed> operator>>(const integer<Bits, Signed> & lhs, int n) noexcept
-{
-    if (static_cast<size_t>(n) >= Bits)
-        return integer<Bits, Signed>(0);
-    if (n <= 0)
-        return lhs;
-    return integer<Bits, Signed>::_impl::shift_right(lhs, n);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator<(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_less(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator<(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) < CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator>(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_greater(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator>(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) > CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator<=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_less(lhs, rhs)
-        || std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_eq(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator<=(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) <= CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator>=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_greater(lhs, rhs)
-        || std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_eq(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator>=(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) >= CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator==(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_eq(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator==(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) == CT(rhs);
-}
-
-template <size_t Bits, typename Signed, size_t Bits2, typename Signed2>
-constexpr bool operator!=(const integer<Bits, Signed> & lhs, const integer<Bits2, Signed2> & rhs)
-{
-    return !std::common_type_t<integer<Bits, Signed>, integer<Bits2, Signed2>>::_impl::operator_eq(lhs, rhs);
-}
-template <typename Arithmetic, typename Arithmetic2, class>
-constexpr bool operator!=(const Arithmetic & lhs, const Arithmetic2 & rhs)
-{
-    return CT(lhs) != CT(rhs);
-}
-#undef CT
-
-}
-#pragma clang attribute pop
-
-namespace std
-{
-
-template <size_t Bits, typename Signed>
-struct hash<wide::integer<Bits, Signed>>
-{
-    std::size_t operator()(const wide::integer<Bits, Signed> & lhs) const
-    {
-        static_assert(Bits % (sizeof(size_t) * 8) == 0);
-
-        const auto * ptr = reinterpret_cast<const size_t *>(lhs.items);
-        unsigned count = Bits / (sizeof(size_t) * 8);
-
-        size_t res = 0;
-        for (unsigned i = 0; i < count; ++i)
-            res ^= ptr[i];
-        return res;
-    }
-};
-
-}
-
-// NOLINTEND(*)
-namespace wide
-{
-template <size_t Bits, typename Signed>
-class integer;
-}
-
-using Int128 = wide::integer<128, signed>;
-using UInt128 = wide::integer<128, unsigned>;
-using Int256 = wide::integer<256, signed>;
-using UInt256 = wide::integer<256, unsigned>;
+} // namespace std
 
 namespace wide
 {
 
 template <size_t Bits, typename Signed>
-std::string to_string(const integer<Bits, Signed> & n);
-
-template <size_t Bits, typename Signed>
-std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value);
-}
-
-/// See https://fmt.dev/latest/api.html#formatting-user-defined-types
-template <size_t Bits, typename Signed>
-struct fmt::formatter<wide::integer<Bits, Signed>>
+inline std::string to_string(const integer<Bits, Signed> & v)
 {
-    constexpr auto parse(format_parse_context & ctx)
+    integer<Bits, Signed> tmp = v;
+    bool neg = false;
+    if (std::is_same<Signed, signed>::value && (v.data_[integer<Bits, Signed>::limbs - 1] >> 63))
     {
-        const auto * it = ctx.begin();
-        const auto * end = ctx.end();
-
-        /// Only support {}.
-        if (it != end && *it != '}')
-            throw format_error("invalid format");
-
-        return it;
+        tmp = -v;
+        neg = true;
     }
-
-    template <typename FormatContext>
-    auto format(const wide::integer<Bits, Signed> & value, FormatContext & ctx) const
-    {
-        return fmt::format_to(ctx.out(), "{}", to_string(value));
-    }
-};
-namespace wide
-{
-template <size_t Bits, typename Signed>
-
-inline std::string to_string(const integer<Bits, Signed> & n)
-{
-    if (integer<Bits, Signed>::_impl::operator_eq(n, 0U))
+    if (tmp.is_zero())
         return "0";
-
-    integer<Bits, unsigned> t;
-    bool is_neg = integer<Bits, Signed>::_impl::is_negative(n);
-    if (is_neg)
-        t = integer<Bits, Signed>::_impl::operator_unary_minus(n);
-    else
-        t = n;
-
     std::string res;
-    res.reserve(Bits / 3 + 1);
-    while (!integer<Bits, unsigned>::_impl::operator_eq(t, 0U))
+    while (!tmp.is_zero())
     {
-        auto rem = integer<Bits, unsigned>::_impl::div_mod_small(t, 10);
-        res.push_back(static_cast<char>('0' + rem));
+        integer<Bits, Signed> q;
+        typename integer<Bits, Signed>::limb_type rem = tmp.div_mod_small(10, q);
+        res.insert(res.begin(), static_cast<char>('0' + rem));
+        tmp = q;
     }
-
-    if (is_neg)
-        res.push_back('-');
-    std::reverse(res.begin(), res.end());
+    if (neg)
+        res.insert(res.begin(), '-');
     return res;
 }
 
 template <size_t Bits, typename Signed>
-std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value)
+inline std::ostream & operator<<(std::ostream & out, const integer<Bits, Signed> & value)
 {
     return out << to_string(value);
 }
-}
+
+} // namespace wide
+
+namespace fmt
+{
+template <size_t Bits, typename Signed>
+struct formatter<wide::integer<Bits, Signed>>
+{
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext & ctx) -> typename ParseContext::iterator
+    {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const wide::integer<Bits, Signed> & value, FormatContext & ctx) const -> typename FormatContext::iterator
+    {
+        return fmt::format_to(ctx.out(), "{}", wide::to_string(value));
+    }
+};
+} // namespace fmt
